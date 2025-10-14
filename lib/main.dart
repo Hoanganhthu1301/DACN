@@ -4,20 +4,27 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'services/auth_service.dart';
+import 'screens/dashboard_screen.dart';
+
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-  options: const FirebaseOptions(
-    apiKey: "AIzaSyCvPd_JLGFlHVyJ3WR2eCyy1YtCaHTuJ-o",
-    authDomain: "goiymonan-e8fba.firebaseapp.com",
-    projectId: "goiymonan-e8fba",
-    storageBucket: "goiymonan-e8fba.firebasestorage.app",
-    messagingSenderId: "655103036581",
-    appId: "1:655103036581:web:340738ae9bf7ae0425514c",
-    measurementId: "G-DVC9S6TSWM",
-  ),
-);
+
+  try {
+    await Firebase.initializeApp(
+      options: const FirebaseOptions(
+        apiKey: "AIzaSyCvPd_JLGFlHVyJ3WR2eCyy1YtCaHTuJ-o",
+        authDomain: "goiymonan-e8fba.firebaseapp.com",
+        projectId: "goiymonan-e8fba",
+        storageBucket: "goiymonan-e8fba.firebasestorage.app",
+        messagingSenderId: "655103036581",
+        appId: "1:655103036581:web:340738ae9bf7ae0425514c",
+        measurementId: "G-DVC9S6TSWM",
+      ),
+    );
+  } catch (e) {
+   debugPrint('Firebase đã được khởi tạo: $e');
+  }
 
   runApp(const MyApp());
 }
@@ -54,7 +61,7 @@ class AuthWrapper extends StatelessWidget {
               body: Center(child: CircularProgressIndicator()));
         }
         if (snapshot.hasData) {
-          return const HomeScreen();
+           return const DashboardScreen();
         }
         return const LoginScreen();
       },

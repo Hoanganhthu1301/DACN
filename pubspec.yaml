@@ -15,6 +15,10 @@ dependencies:
   # Thêm sau cho UI đẹp hơn (tùy chọn)
   fluttertoast: ^8.2.4  # Hiển thị thông báo
   loading_animation_widget: ^1.2.0+4  # Loading spinner
+  image_picker: ^1.2.0
+  video_player: ^2.10.0
+  firebase_storage: ^12.4.10
+  cloud_firestore: ^5.6.12
 
 dev_dependencies:
   flutter_test:
