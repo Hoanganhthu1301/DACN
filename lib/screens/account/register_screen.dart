@@ -1,88 +1,138 @@
-// lib/screens/register_screen.dart (Sửa tất cả lỗi)
-// Thêm // ignore cho private types, thêm key, sửa validator null-safe, sort child last (style trước child), mounted check
 import 'package:flutter/material.dart';
-// ignore: depend_on_referenced_packages
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/auth_service.dart';
+import '../../services/profile_service.dart';
+import '../dashboard_screen.dart';
 import 'login_screen.dart';
-import '../home_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
-  const RegisterScreen({super.key});  // Thêm key và const
+  const RegisterScreen({super.key});
 
   @override
   State<RegisterScreen> createState() => _RegisterScreenState();
 }
 
-// ignore: library_private_types_in_public_api  // Ignore lint này (chuẩn Flutter)
 class _RegisterScreenState extends State<RegisterScreen> {
   final AuthService _authService = AuthService();
+
+  final _displayNameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Đăng Ký')),  // Thêm const nếu có thể
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),  // const
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              TextFormField(
-                controller: _emailController,
-                decoration: const InputDecoration(labelText: 'Email'),  // const
-                validator: (value) => value?.isEmpty ?? true ? 'Nhập email' : null,
-                keyboardType: TextInputType.emailAddress,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _passwordController,
-                decoration: const InputDecoration(labelText: 'Mật khẩu'),  // const
-                obscureText: true,
-                validator: (value) => (value?.length ?? 0) < 6 ? 'Mật khẩu ít nhất 6 ký tự' : null,  // Sửa null-safe cho length
-              ),
-              const SizedBox(height: 20),
-              _isLoading
-                  ? const CircularProgressIndicator()  // const
-                  : ElevatedButton(
-                      onPressed: _register,
-                      style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 50)),  // const, di chuyển style trước child
-                      child: const Text('Đăng Ký'),  // child last, const
-                    ),
-              TextButton(
-                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginScreen())),  // const Login
-                child: const Text('Đã có tài khoản? Đăng nhập'),  // child last, const
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+  void dispose() {
+    _displayNameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 
-  void _register() async {
-    if (_formKey.currentState?.validate() ?? false) {
-      setState(() => _isLoading = true);
-      User? user = await _authService.register(
+  Future<void> _register() async {
+    FocusScope.of(context).unfocus();
+
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      // Đăng ký user mới
+      final User? user = await _authService.register(
         _emailController.text.trim(),
         _passwordController.text.trim(),
+        _displayNameController.text.trim(),
       );
+
+      if (!mounted) return;
       setState(() => _isLoading = false);
-      if (user != null && mounted) {  // Thêm mounted check
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));
+
+      if (user != null) {
+        // Tạo hoặc cập nhật document Firestore cho user vừa đăng ký
+        await ProfileService().ensureUserDoc(user);
+
+        if (!mounted) return;
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const DashboardScreen()),
+          (route) => false,
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Đăng ký thất bại. Email có thể đã tồn tại.'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     }
   }
 
   @override
-  void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
-    super.dispose();
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Đăng Ký')),
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16.0),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                TextFormField(
+                  controller: _displayNameController,
+                  decoration: const InputDecoration(labelText: 'Tên hiển thị'),
+                  validator: (v) => (v == null || v.isEmpty)
+                      ? 'Vui lòng nhập tên của bạn'
+                      : null,
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _emailController,
+                  decoration: const InputDecoration(labelText: 'Email'),
+                  validator: (v) =>
+                      (v == null || v.isEmpty) ? 'Vui lòng nhập email' : null,
+                  keyboardType: TextInputType.emailAddress,
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _passwordController,
+                  decoration: const InputDecoration(labelText: 'Mật khẩu'),
+                  obscureText: true,
+                  validator: (v) => (v == null || v.length < 6)
+                      ? 'Mật khẩu cần ít nhất 6 ký tự'
+                      : null,
+                ),
+                const SizedBox(height: 24),
+                _isLoading
+                    ? const CircularProgressIndicator()
+                    : ElevatedButton(
+                        onPressed: _register,
+                        style: ElevatedButton.styleFrom(
+                          minimumSize: const Size(double.infinity, 50),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text('Đăng Ký'),
+                      ),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pushReplacement(
+                    MaterialPageRoute(builder: (_) => const LoginScreen()),
+                  ),
+                  child: const Text('Đã có tài khoản? Đăng nhập ngay'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

@@ -1,26 +1,66 @@
-// lib/screens/login_screen.dart (Tương tự register_screen)
 import 'package:flutter/material.dart';
-// ignore: depend_on_referenced_packages
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/auth_service.dart';
+import '../../services/profile_service.dart';
 import 'register_screen.dart';
-// import 'home_screen.dart';
 import '../dashboard_screen.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});  // Thêm key
+  const LoginScreen({super.key});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-// ignore: library_private_types_in_public_api
 class _LoginScreenState extends State<LoginScreen> {
   final AuthService _authService = AuthService();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _login() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+
+    setState(() => _isLoading = true);
+    try {
+      final User? user = await _authService.login(
+        _emailController.text.trim(),
+        _passwordController.text.trim(),
+      );
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+
+      if (user != null) {
+        // Đảm bảo users/{uid} tồn tại để dùng cho Profile
+        await ProfileService().ensureUserDoc(user);
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const DashboardScreen()),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Đăng nhập thất bại. Kiểm tra email/mật khẩu.'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -36,7 +76,8 @@ class _LoginScreenState extends State<LoginScreen> {
               TextFormField(
                 controller: _emailController,
                 decoration: const InputDecoration(labelText: 'Email'),
-                validator: (value) => value?.isEmpty ?? true ? 'Nhập email' : null,
+                validator: (v) =>
+                    (v == null || v.isEmpty) ? 'Nhập email' : null,
                 keyboardType: TextInputType.emailAddress,
               ),
               const SizedBox(height: 16),
@@ -44,18 +85,24 @@ class _LoginScreenState extends State<LoginScreen> {
                 controller: _passwordController,
                 decoration: const InputDecoration(labelText: 'Mật khẩu'),
                 obscureText: true,
-                validator: (value) => value?.isEmpty ?? true ? 'Nhập mật khẩu' : null,
+                validator: (v) =>
+                    (v == null || v.isEmpty) ? 'Nhập mật khẩu' : null,
               ),
               const SizedBox(height: 20),
               _isLoading
                   ? const CircularProgressIndicator()
                   : ElevatedButton(
                       onPressed: _login,
-                      style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 50)),
-                      child: const Text('Đăng Nhập'),  // child last
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 50),
+                      ),
+                      child: const Text('Đăng Nhập'),
                     ),
               TextButton(
-                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RegisterScreen())),
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const RegisterScreen()),
+                ),
                 child: const Text('Chưa có tài khoản? Đăng ký'),
               ),
             ],
@@ -63,26 +110,5 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       ),
     );
-  }
-
-  void _login() async {
-    if (_formKey.currentState?.validate() ?? false) {
-      setState(() => _isLoading = true);
-      User? user = await _authService.login(
-        _emailController.text.trim(),
-        _passwordController.text.trim(),
-      );
-      setState(() => _isLoading = false);
-      if (user != null && mounted) {  // mounted check
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const DashboardScreen()));
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
-    super.dispose();
   }
 }
