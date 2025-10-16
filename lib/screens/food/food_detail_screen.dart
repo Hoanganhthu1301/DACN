@@ -21,15 +21,22 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
     super.dispose();
   }
 
+Future<void> _loadVideo(String url) async {
+  if (url.isEmpty) return;
+
+  _videoController = VideoPlayerController.networkUrl(Uri.parse(url));
+
+  await _videoController!.initialize();
+  setState(() => _isVideoReady = true);
+}
+
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Chi tiết món ăn")),
+      appBar: AppBar(title: const Text("Chi tiết món ăn"), backgroundColor: Colors.green),
       body: FutureBuilder<DocumentSnapshot>(
-        future: FirebaseFirestore.instance
-            .collection('foods')
-            .doc(widget.foodId)
-            .get(),
+        future: FirebaseFirestore.instance.collection('foods').doc(widget.foodId).get(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -39,21 +46,18 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
           }
 
           final food = snapshot.data!.data() as Map<String, dynamic>;
-
           final imageUrl = food['image_url'] ?? '';
           final videoUrl = food['video_url'] ?? '';
+          debugPrint(" Video URL Firestore: $videoUrl"); 
           final name = food['name'] ?? 'Không rõ tên';
           final calories = food['calories']?.toString() ?? '0';
           final diet = food['diet'] ?? 'Không xác định';
           final ingredients = food['ingredients'] ?? 'Không có';
           final instructions = food['instructions'] ?? 'Không có hướng dẫn.';
 
-          // Khởi tạo video (chỉ khi có link)
-          if (videoUrl.isNotEmpty && !_isVideoReady) {
-            _videoController = VideoPlayerController.networkUrl(Uri.parse(videoUrl))
-              ..initialize().then((_) {
-                setState(() => _isVideoReady = true);
-              });
+          // ✅ Chỉ khởi tạo video 1 lần duy nhất
+          if (videoUrl.isNotEmpty && _videoController == null) {
+            _loadVideo(videoUrl);
           }
 
           return SingleChildScrollView(
@@ -81,30 +85,18 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(name,
-                          style: const TextStyle(
-                              fontSize: 24, fontWeight: FontWeight.bold)),
+                      Text(name, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 8),
-                      Text("Calo: $calories kcal",
-                          style: const TextStyle(fontSize: 16)),
-                      Text("Chế độ ăn: $diet",
-                          style: const TextStyle(fontSize: 16)),
+                      Text("Calo: $calories kcal", style: const TextStyle(fontSize: 16)),
+                      Text("Chế độ ăn: $diet", style: const TextStyle(fontSize: 16)),
                       const SizedBox(height: 16),
 
-                      // --- Nguyên liệu ---
-                      const Text("Nguyên liệu:",
-                          style: TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.bold)),
-                      Text(ingredients,
-                          style: const TextStyle(fontSize: 16, height: 1.4)),
+                      const Text("Nguyên liệu:", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      Text(ingredients, style: const TextStyle(fontSize: 16, height: 1.4)),
                       const SizedBox(height: 20),
 
-                      // --- Hướng dẫn ---
-                      const Text("Hướng dẫn nấu:",
-                          style: TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.bold)),
-                      Text(instructions,
-                          style: const TextStyle(fontSize: 16, height: 1.4)),
+                      const Text("Hướng dẫn nấu:", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      Text(instructions, style: const TextStyle(fontSize: 16, height: 1.4)),
                       const SizedBox(height: 20),
                     ],
                   ),
@@ -112,38 +104,49 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
 
                 // --- Video hướng dẫn ---
                 if (videoUrl.isNotEmpty)
-                  Column(
-                    children: [
-                      if (_isVideoReady && _videoController != null)
-                        AspectRatio(
-                          aspectRatio: _videoController!.value.aspectRatio,
-                          child: VideoPlayer(_videoController!),
-                        )
-                      else
-                        const Center(
-                            child: Padding(
-                          padding: EdgeInsets.all(12.0),
-                          child: CircularProgressIndicator(),
-                        )),
-                      if (_isVideoReady && _videoController != null)
-                        IconButton(
-                          icon: Icon(
-                            _videoController!.value.isPlaying
-                                ? Icons.pause
-                                : Icons.play_arrow,
-                            size: 40,
-                          ),
-                          onPressed: () {
-                            setState(() {
-                              _videoController!.value.isPlaying
-                                  ? _videoController!.pause()
-                                  : _videoController!.play();
-                            });
-                          },
-                        ),
-                    ],
+                  Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: Column(
+                      children: [
+                        const Text("Video hướng dẫn:",
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 10),
+                        if (_isVideoReady && _videoController != null)
+                          AspectRatio(
+                            aspectRatio: _videoController!.value.aspectRatio,
+                            child: Stack(
+                              alignment: Alignment.bottomCenter,
+                              children: [
+                                VideoPlayer(_videoController!),
+                                VideoProgressIndicator(_videoController!, allowScrubbing: true),
+                                Center(
+                                  child: IconButton(
+                                    iconSize: 50,
+                                    color: Colors.white,
+                                    icon: Icon(
+                                      _videoController!.value.isPlaying
+                                          ? Icons.pause_circle
+                                          : Icons.play_circle,
+                                    ),
+                                    onPressed: () {
+                                      setState(() {
+                                        if (_videoController!.value.isPlaying) {
+                                          _videoController!.pause();
+                                        } else {
+                                          _videoController!.play();
+                                        }
+                                      });
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        else
+                          const Center(child: CircularProgressIndicator()),
+                      ],
+                    ),
                   ),
-                const SizedBox(height: 20),
               ],
             ),
           );
