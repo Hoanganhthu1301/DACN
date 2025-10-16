@@ -1,14 +1,15 @@
-// lib/screens/login_screen.dart (Tương tự register_screen)
+// lib/screens/account/login_screen.dart
+
 import 'package:flutter/material.dart';
 // ignore: depend_on_referenced_packages
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/auth_service.dart';
 import 'register_screen.dart';
-// import 'home_screen.dart';
 import '../dashboard_screen.dart';
+import 'user_management_screen.dart'; // Import màn hình Admin
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});  // Thêm key
+  const LoginScreen({super.key}); 
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -52,7 +53,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   : ElevatedButton(
                       onPressed: _login,
                       style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 50)),
-                      child: const Text('Đăng Nhập'),  // child last
+                      child: const Text('Đăng Nhập'),
                     ),
               TextButton(
                 onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RegisterScreen())),
@@ -68,13 +69,46 @@ class _LoginScreenState extends State<LoginScreen> {
   void _login() async {
     if (_formKey.currentState?.validate() ?? false) {
       setState(() => _isLoading = true);
+
+      // 1. Thực hiện Đăng nhập (Bao gồm kiểm tra isLocked trong AuthService)
       User? user = await _authService.login(
         _emailController.text.trim(),
         _passwordController.text.trim(),
       );
+
+      // 2. Kiểm tra mounted ngay sau await đầu tiên (QUAN TRỌNG)
+      if (!mounted) return;
+
       setState(() => _isLoading = false);
-      if (user != null && mounted) {  // mounted check
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const DashboardScreen()));
+
+      if (user != null) {
+        // 3. Đăng nhập thành công, lấy vai trò
+        final role = await _authService.getCurrentUserRole();
+
+        // 4. Kiểm tra mounted lần hai sau await vai trò (QUAN TRỌNG)
+        if (!mounted) return;
+
+        // 5. Chuyển hướng dựa trên vai trò
+        if (role == 'admin') {
+          // Admin đi thẳng vào màn hình quản lý người dùng
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const UserManagementScreen()),
+          );
+        } else {
+          // User/Editor đi vào Dashboard
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const DashboardScreen()),
+          );
+        }
+      } else {
+        // Nếu user == null (đăng nhập thất bại do sai thông tin hoặc bị khóa)
+        // Thông báo lỗi đã được hiển thị bằng FlutterToast từ AuthService.
+        // Chỉ hiển thị SnackBar phụ trợ nếu cần.
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Đăng nhập thất bại. Vui lòng thử lại.')),
+        );
       }
     }
   }
