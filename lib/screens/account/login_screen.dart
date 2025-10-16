@@ -2,9 +2,10 @@
 import 'package:flutter/material.dart';
 // ignore: depend_on_referenced_packages
 import 'package:firebase_auth/firebase_auth.dart';
-import '../services/auth_service.dart';
+import '../../services/auth_service.dart';
 import 'register_screen.dart';
-import 'home_screen.dart';
+// import 'home_screen.dart';
+import '../dashboard_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});  // Thêm key
@@ -73,7 +74,7 @@ class _LoginScreenState extends State<LoginScreen> {
       );
       setState(() => _isLoading = false);
       if (user != null && mounted) {  // mounted check
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const DashboardScreen()));
       }
     }
   }

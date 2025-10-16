@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'food_list_page.dart';
+import 'food/food_list_page.dart';
 import 'home_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
