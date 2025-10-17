@@ -1,9 +1,16 @@
+// lib/screens/dashboard_screen.dart
+
+import 'package:firebase_auth/firebase_auth.dart'; 
 import 'package:flutter/material.dart';
+
+// Imports từ cả hai nhánh (Đã hợp nhất)
 import 'food/food_list_page.dart';
 import 'home_screen.dart';
-import 'account/user_management_screen.dart'; // Màn hình Admin
-import '../services/auth_service.dart'; // Import AuthService để kiểm tra vai trò
+import 'account/user_management_screen.dart'; // Màn hình Admin (HEAD)
+import '../services/auth_service.dart'; // Import AuthService (HEAD)
+import 'profile/profile_screen.dart'; // Màn hình Profile (THU)
 
+// ignore: library_private_types_in_public_api
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
@@ -11,13 +18,27 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
+// ignore: library_private_types_in_public_api
 class _DashboardScreenState extends State<DashboardScreen> {
   int _currentIndex = 0;
 
-  final List<Widget> _pages = const [
-    HomeScreen(),    // Trang chủ
-    FoodListPage(),  // Danh sách món ăn
-  ];
+  // Lấy UID của người dùng hiện tại (QUAN TRỌNG: Phải đảm bảo user đã đăng nhập)
+  // Nếu FirebaseAuth.instance.currentUser là null, ứng dụng sẽ crash.
+  // Vì DashboardScreen chỉ được load sau khi login, nên ta có thể dùng !.
+  final String currentUserId = FirebaseAuth.instance.currentUser?.uid ?? 'guest_id'; 
+
+  late final List<Widget> _pages; // Khai báo _pages
+
+  @override
+  void initState() {
+    super.initState();
+    // Khởi tạo _pages với 3 màn hình
+    _pages = [
+      const HomeScreen(), 
+      const FoodListPage(), 
+      ProfileScreen(userId: currentUserId), // Trang cá nhân
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -27,6 +48,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       
       body: _pages[_currentIndex],
       
+      // BottomNavigationBar với 3 mục
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         selectedItemColor: Colors.orange,
@@ -36,14 +58,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           });
         },
         items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home),
-            label: 'Trang chủ',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.fastfood),
-            label: 'Món ăn',
-          ),
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Trang chủ'),
+          BottomNavigationBarItem(icon: Icon(Icons.fastfood), label: 'Món ăn'),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Cá nhân'), // Mục Profile
         ],
       ),
     );
@@ -72,8 +89,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             leading: const Icon(Icons.home),
             title: const Text('Trang chủ'),
             onTap: () {
-              Navigator.pop(context); // Đóng Drawer
-              setState(() => _currentIndex = 0); // Chuyển đến trang chủ
+              Navigator.pop(context); 
+              setState(() => _currentIndex = 0); 
             },
           ),
           
@@ -82,8 +99,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
             leading: const Icon(Icons.fastfood),
             title: const Text('Danh sách Món ăn'),
             onTap: () {
-              Navigator.pop(context); // Đóng Drawer
-              setState(() => _currentIndex = 1); // Chuyển đến trang món ăn
+              Navigator.pop(context); 
+              setState(() => _currentIndex = 1); 
+            },
+          ),
+
+          // Mục Profile (Cá nhân)
+          ListTile(
+            leading: const Icon(Icons.person),
+            title: const Text('Trang cá nhân'),
+            onTap: () {
+              Navigator.pop(context); 
+              setState(() => _currentIndex = 2); 
             },
           ),
 
@@ -93,40 +120,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
           FutureBuilder<String>(
             future: AuthService().getCurrentUserRole(),
             builder: (context, snapshot) {
-              // Nếu đang tải hoặc có lỗi, không hiển thị gì
               if (snapshot.connectionState != ConnectionState.done) {
                 return const SizedBox.shrink();
               }
               
               final role = snapshot.data;
               
-              // CHỈ HIỂN THỊ cho Admin
               if (role == 'admin') {
                 return ListTile(
                   leading: const Icon(Icons.admin_panel_settings, color: Colors.red),
                   title: const Text('Quản lý Người dùng (Admin)'),
                   onTap: () {
-                    Navigator.pop(context); // Đóng Drawer
+                    Navigator.pop(context); 
                     Navigator.of(context).push(
                       MaterialPageRoute(builder: (context) => const UserManagementScreen()),
                     );
                   },
                 );
               }
-              // Trả về widget rỗng nếu không phải Admin
               return const SizedBox.shrink();
             },
           ),
           
           const Divider(),
 
-          // Mục Đăng xuất
+          // Mục Đăng xuất (Cho mọi User)
           ListTile(
             leading: const Icon(Icons.logout),
             title: const Text('Đăng xuất'),
             onTap: () async {
               await AuthService().logout();
-              // Thường sẽ chuyển hướng về màn hình Login/Wrapper
+              // Chuyển hướng về màn hình Login/Wrapper
               Navigator.of(context).popUntil((route) => route.isFirst); 
             },
           ),
