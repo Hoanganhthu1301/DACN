@@ -1,8 +1,9 @@
-import 'package:firebase_auth/firebase_auth.dart'; // Thêm import này
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'food/food_list_page.dart';
+import 'food/manage_food_page.dart'; // Trang quản lý (admin)
 import 'home_screen.dart';
-import 'profile/profile_screen.dart'; // Thêm import cho màn hình profile mới
+import 'profile/profile_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -13,25 +14,63 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   int _currentIndex = 0;
-
-  // Lấy UID của người dùng hiện tại
+  String userRole = ''; // admin hoặc user
   final String currentUserId = FirebaseAuth.instance.currentUser!.uid;
-
-  late final List<Widget> _pages; // Khai báo _pages ở đây
+  late List<Widget> _pages;
 
   @override
   void initState() {
     super.initState();
-    // Khởi tạo _pages trong initState để có thể truyền currentUserId
-    _pages = [
-      const HomeScreen(), // Trang chủ
-      const FoodListPage(), // Danh sách món ăn
-      ProfileScreen(userId: currentUserId), // Trang cá nhân, truyền UID vào
-    ];
+    _loadUserRole();
+  }
+
+  Future<void> _loadUserRole() async {
+    try {
+      DocumentSnapshot userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUserId)
+          .get();
+
+      String role = userDoc['role'] ?? 'user';
+
+      setState(() {
+        userRole = role;
+
+        // 👉 Nếu là admin thì có thêm trang "Quản lý"
+        if (userRole == 'admin') {
+          _pages = [
+            const HomeScreen(),
+            const ManageFoodPage(),
+            ProfileScreen(userId: currentUserId),
+          ];
+        } else {
+          // 👉 User chỉ có Trang chủ và Cá nhân
+          _pages = [
+            const HomeScreen(),
+            ProfileScreen(userId: currentUserId),
+          ];
+        }
+      });
+    } catch (e) {
+      print('Lỗi lấy role: $e');
+      setState(() {
+        userRole = 'user';
+        _pages = [
+          const HomeScreen(),
+          ProfileScreen(userId: currentUserId),
+        ];
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (userRole.isEmpty) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
       body: _pages[_currentIndex],
       bottomNavigationBar: BottomNavigationBar(
@@ -42,12 +81,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
             _currentIndex = index;
           });
         },
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Trang chủ'),
-          BottomNavigationBarItem(icon: Icon(Icons.fastfood), label: 'Món ăn'),
-          // Thêm mục Profile
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Cá nhân'),
-        ],
+        items: userRole == 'admin'
+            ? const [
+                BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Trang chủ'),
+                BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Quản lý'),
+                BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Cá nhân'),
+              ]
+            : const [
+                BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Trang chủ'),
+                BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Cá nhân'),
+              ],
       ),
     );
   }
