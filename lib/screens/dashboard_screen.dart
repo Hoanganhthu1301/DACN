@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'food/manage_food_page.dart'; // Trang quản lý (admin)
-import 'home_screen.dart';
+import 'home/home_screen.dart';
 import 'profile/profile_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -45,20 +45,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ];
         } else {
           // 👉 User chỉ có Trang chủ và Cá nhân
-          _pages = [
-            const HomeScreen(),
-            ProfileScreen(userId: currentUserId),
-          ];
+          _pages = [const HomeScreen(), ProfileScreen(userId: currentUserId)];
         }
       });
     } catch (e) {
       print('Lỗi lấy role: $e');
       setState(() {
         userRole = 'user';
-        _pages = [
-          const HomeScreen(),
-          ProfileScreen(userId: currentUserId),
-        ];
+        _pages = [const HomeScreen(), ProfileScreen(userId: currentUserId)];
       });
     }
   }
@@ -66,9 +60,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     if (userRole.isEmpty) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     return Scaffold(
@@ -83,13 +75,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
         },
         items: userRole == 'admin'
             ? const [
-                BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Trang chủ'),
-                BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Quản lý'),
-                BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Cá nhân'),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.home),
+                  label: 'Trang chủ',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.dashboard),
+                  label: 'Quản lý',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.person),
+                  label: 'Cá nhân',
+                ),
               ]
             : const [
-                BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Trang chủ'),
-                BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Cá nhân'),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.home),
+                  label: 'Trang chủ',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.person),
+                  label: 'Cá nhân',
+                ),
               ],
       ),
     );

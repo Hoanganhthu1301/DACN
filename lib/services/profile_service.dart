@@ -10,7 +10,7 @@ class ProfileService {
   DocumentReference<Map<String, dynamic>> userRef(String uid) =>
       _db.collection('users').doc(uid);
 
-  /// Tạo hoặc cập nhật document người dùng dựa vào User object
+  /// Tạo/cập nhật users/{uid} từ FirebaseAuth.User
   Future<void> ensureUserDoc(User user) async {
     final ref = userRef(user.uid);
     final snap = await ref.get();
@@ -21,6 +21,7 @@ class ProfileService {
         'uid': user.uid,
         'displayName': user.displayName ?? '',
         'photoURL': user.photoURL ?? '',
+        'email': user.email ?? '',
         'bio': '',
         'createdAt': now,
         'updatedAt': now,
@@ -29,15 +30,41 @@ class ProfileService {
       await ref.set({
         'displayName': user.displayName ?? '',
         'photoURL': user.photoURL ?? '',
+        'email': user.email ?? '',
         'updatedAt': now,
       }, SetOptions(merge: true));
     }
   }
 
-  /// Upload ảnh đại diện và cập nhật cả FirebaseAuth lẫn Firestore
-  Future<String> uploadAvatar(User user, File image) async {
+  /// Lắng nghe realtime hồ sơ
+  Stream<Map<String, dynamic>?> userStream(String uid) {
+    return userRef(uid).snapshots().map((d) => d.data());
+  }
+
+  /// Cập nhật tên hiển thị và bio (đồng bộ FirebaseAuth)
+  Future<void> updateProfile({
+    required User user,
+    String? displayName,
+    String? bio,
+  }) async {
+    final updates = <String, dynamic>{
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+    if (displayName != null) {
+      updates['displayName'] = displayName;
+      await user.updateDisplayName(displayName);
+    }
+    if (bio != null) {
+      updates['bio'] = bio;
+    }
+    await userRef(user.uid).set(updates, SetOptions(merge: true));
+    await user.reload();
+  }
+
+  /// Upload avatar lên Storage và cập nhật Auth + Firestore
+  Future<String> uploadAvatar({required User user, required File image}) async {
     final ref = _storage.ref('users/${user.uid}/avatar.jpg');
-    await ref.putFile(image);
+    await ref.putFile(image, SettableMetadata(contentType: 'image/jpeg'));
     final url = await ref.getDownloadURL();
 
     await userRef(user.uid).set({
@@ -46,6 +73,7 @@ class ProfileService {
     }, SetOptions(merge: true));
 
     await user.updatePhotoURL(url);
+    await user.reload();
     return url;
   }
 }
