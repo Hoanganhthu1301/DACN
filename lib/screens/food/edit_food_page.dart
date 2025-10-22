@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class EditFoodPage extends StatefulWidget {
   final String foodId;
@@ -22,10 +23,12 @@ class _EditFoodPageState extends State<EditFoodPage> {
   File? _newImage;
   File? _newVideo;
   bool _loading = false;
-
-  // Dropdown chế độ ăn
   String _diet = 'Mặn';
   final List<String> _dietOptions = ['Mặn', 'Chay', 'Ăn kiêng', 'Low-carb'];
+  String? currentUserEmail;
+  String? currentUserRole;
+  bool hasPermission = false;
+
 
   @override
   void initState() {
@@ -35,6 +38,30 @@ class _EditFoodPageState extends State<EditFoodPage> {
     _ingredients = TextEditingController(text: widget.data['ingredients'] ?? '');
     _instructions = TextEditingController(text: widget.data['instructions'] ?? '');
     _diet = widget.data['diet'] ?? 'Mặn';
+    _loadUserInfo();
+  }
+
+  Future<void> _loadUserInfo() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final userDoc =
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+    if (!userDoc.exists) return;
+
+    setState(() {
+      currentUserEmail = user.email;
+      currentUserRole = userDoc['role'];
+    });
+
+    // --- Kiểm tra quyền ---
+    final createdBy = widget.data['created_by'];
+    final role = widget.data['role'];
+
+    if ((currentUserRole == 'admin' && role == 'admin') ||
+        (currentUserRole == 'user' && createdBy == currentUserEmail)) {
+      setState(() => hasPermission = true);
+    }
   }
 
   Future<void> _pickImage() async {
@@ -61,6 +88,7 @@ class _EditFoodPageState extends State<EditFoodPage> {
             .ref('foods/images/${DateTime.now().millisecondsSinceEpoch}.jpg');
         await refImage.putFile(_newImage!);
         imageUrl = await refImage.getDownloadURL();
+
       }
 
       // Upload video mới nếu có
@@ -71,7 +99,10 @@ class _EditFoodPageState extends State<EditFoodPage> {
         videoUrl = await refVideo.getDownloadURL();
       }
 
-      await FirebaseFirestore.instance.collection('foods').doc(widget.foodId).update({
+      await FirebaseFirestore.instance
+          .collection('foods')
+          .doc(widget.foodId)
+          .update({
         'name': _name.text,
         'calories': int.parse(_cal.text),
         'ingredients': _ingredients.text,
@@ -84,7 +115,7 @@ class _EditFoodPageState extends State<EditFoodPage> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Cập nhật thành công!')),
+          const SnackBar(content: Text('✅ Cập nhật thành công!')),
         );
         Navigator.pop(context);
       }
@@ -100,15 +131,33 @@ class _EditFoodPageState extends State<EditFoodPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (!hasPermission) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Sửa món ăn')),
+        body: const Center(
+          child: Text(
+            '🚫 Bạn không có quyền chỉnh sửa món ăn này',
+            style: TextStyle(fontSize: 18, color: Colors.red),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(title: const Text('Sửa món ăn')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            TextField(controller: _name, decoration: const InputDecoration(labelText: 'Tên món')),
-            TextField(controller: _cal, decoration: const InputDecoration(labelText: 'Calo')),
-            TextField(controller: _ingredients, decoration: const InputDecoration(labelText: 'Nguyên liệu')),
+            TextField(
+                controller: _name,
+                decoration: const InputDecoration(labelText: 'Tên món')),
+            TextField(
+                controller: _cal,
+                decoration: const InputDecoration(labelText: 'Calo')),
+            TextField(
+                controller: _ingredients,
+                decoration: const InputDecoration(labelText: 'Nguyên liệu')),
             TextField(
               controller: _instructions,
               decoration: const InputDecoration(labelText: 'Hướng dẫn nấu'),
@@ -119,10 +168,12 @@ class _EditFoodPageState extends State<EditFoodPage> {
             DropdownButtonFormField<String>(
               initialValue: _diet,
               decoration: const InputDecoration(labelText: 'Chế độ ăn'),
-              items: _dietOptions.map((diet) => DropdownMenuItem(
-                value: diet,
-                child: Text(diet),
-              )).toList(),
+              items: _dietOptions
+                  .map((diet) => DropdownMenuItem(
+                        value: diet,
+                        child: Text(diet),
+                      ))
+                  .toList(),
               onChanged: (val) {
                 if (val != null) setState(() => _diet = val);
               },
@@ -132,9 +183,13 @@ class _EditFoodPageState extends State<EditFoodPage> {
             _newImage != null
                 ? Image.file(_newImage!, width: 120, height: 120, fit: BoxFit.cover)
                 : (widget.data['image_url'] != null
-                    ? Image.network(widget.data['image_url'], width: 120, height: 120, fit: BoxFit.cover)
+                    ? Image.network(widget.data['image_url'],
+                        width: 120, height: 120, fit: BoxFit.cover)
                     : const Text('Chưa có ảnh')),
-            TextButton.icon(onPressed: _pickImage, icon: const Icon(Icons.image), label: const Text('Chọn ảnh')),
+            TextButton.icon(
+                onPressed: _pickImage,
+                icon: const Icon(Icons.image),
+                label: const Text('Chọn ảnh')),
 
             const SizedBox(height: 10),
             _newVideo != null
@@ -142,7 +197,10 @@ class _EditFoodPageState extends State<EditFoodPage> {
                 : (widget.data['video_url'] != null
                     ? const Text('Video hiện tại có sẵn ✅')
                     : const Text('Chưa có video')),
-            TextButton.icon(onPressed: _pickVideo, icon: const Icon(Icons.video_library), label: const Text('Chọn video')),
+            TextButton.icon(
+                onPressed: _pickVideo,
+                icon: const Icon(Icons.video_library),
+                label: const Text('Chọn video')),
 
             const SizedBox(height: 20),
             ElevatedButton(

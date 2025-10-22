@@ -1,0 +1,12 @@
+[33mcfb732d[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m HEAD@{0}: reset: moving to HEAD
+[33mcfb732d[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m HEAD@{1}: checkout: moving from diem to main
+[33me1f947f[m[33m ([m[1;32mdiem[m[33m)[m HEAD@{2}: commit: quan ly bai viet
+[33mdfb5c6b[m[33m ([m[1;31morigin/thu[m[33m, [m[1;31morigin/diem[m[33m, [m[1;32mthu[m[33m)[m HEAD@{3}: checkout: moving from diem to diem
+[33mdfb5c6b[m[33m ([m[1;31morigin/thu[m[33m, [m[1;31morigin/diem[m[33m, [m[1;32mthu[m[33m)[m HEAD@{4}: checkout: moving from thu to diem
+[33mdfb5c6b[m[33m ([m[1;31morigin/thu[m[33m, [m[1;31morigin/diem[m[33m, [m[1;32mthu[m[33m)[m HEAD@{5}: checkout: moving from thu to thu
+[33mdfb5c6b[m[33m ([m[1;31morigin/thu[m[33m, [m[1;31morigin/diem[m[33m, [m[1;32mthu[m[33m)[m HEAD@{6}: checkout: moving from main to thu
+[33mcfb732d[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m HEAD@{7}: commit: Update add_food_page
+[33mf75681e[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m HEAD@{8}: commit: moi up
+[33m120562f[m HEAD@{9}: commit: up
+[33m8f023fb[m HEAD@{10}: commit: up
+[33me845b2e[m HEAD@{11}: clone: from https://github.com/Hoanganhthu1301/DACN.git
