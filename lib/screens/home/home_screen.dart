@@ -75,9 +75,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   // Card "Yêu thích" → mở danh sách món đã lưu (Saved)
                   _buildFeatureCard(
-                    'Yêu thích',
-                    Icons.favorite,
-                    Colors.pink,
+                    'Đã lưu',
+                    Icons.bookmark,
+                    Colors.blueGrey,
                     () {
                       Navigator.push(
                         context,

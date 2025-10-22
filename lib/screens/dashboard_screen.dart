@@ -49,7 +49,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         }
       });
     } catch (e) {
-      print('Lỗi lấy role: $e');
+    debugPrint('Lỗi lấy role: $e');
       setState(() {
         userRole = 'user';
         _pages = [const HomeScreen(), ProfileScreen(userId: currentUserId)];
