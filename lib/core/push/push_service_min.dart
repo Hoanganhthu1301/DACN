@@ -78,11 +78,13 @@ class PushServiceMin {
 
     // 4) Người dùng bấm vào notification
     FirebaseMessaging.onMessageOpenedApp.listen((m) {
+      if (!context.mounted) return;
       _handleTap(context, jsonEncode(m.data));
     });
 
     // 5) App mở từ thông báo khi đang bị kill
     final initial = await _messaging.getInitialMessage();
+    if (!context.mounted) return;
     if (initial != null) {
       _handleTap(context, jsonEncode(initial.data));
     }

@@ -1,13 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-
-// Thêm import để điều hướng tới trang hồ sơ người đăng
-import '../profile/profile_screen.dart';
+import '../profile/profile_screen.dart'; // import trang profile người đăng
 
 class FoodDetailScreen extends StatefulWidget {
   final String foodId;
-
   const FoodDetailScreen({super.key, required this.foodId});
 
   @override
@@ -17,11 +14,47 @@ class FoodDetailScreen extends StatefulWidget {
 class _FoodDetailScreenState extends State<FoodDetailScreen> {
   VideoPlayerController? _videoController;
   bool _isVideoReady = false;
+  String instructions = '';
 
   @override
   void dispose() {
     _videoController?.dispose();
     super.dispose();
+  }
+
+  void _setupVideo(String videoUrl) {
+    if (_videoController == null && videoUrl.isNotEmpty) {
+      _videoController = VideoPlayerController.networkUrl(Uri.parse(videoUrl))
+        ..initialize().then((_) {
+          if (mounted) setState(() => _isVideoReady = true);
+        });
+    }
+  }
+
+  void _togglePlayPause() {
+    if (_videoController == null) return;
+    setState(() {
+      _videoController!.value.isPlaying
+          ? _videoController!.pause()
+          : _videoController!.play();
+    });
+  }
+
+  void _seekBy(Duration offset) {
+    if (_videoController == null) return;
+    final pos = _videoController!.value.position;
+    final dur = _videoController!.value.duration;
+    var target = pos + offset;
+    if (target < Duration.zero) target = Duration.zero;
+    if (target > dur) target = dur;
+    _videoController!.seekTo(target);
+  }
+
+  void _changeSpeed(double delta) {
+    if (_videoController == null) return;
+    final curSpeed = _videoController!.value.playbackSpeed;
+    _videoController!.setPlaybackSpeed((curSpeed + delta).clamp(0.25, 3.0));
+    setState(() {}); // cập nhật text tốc độ
   }
 
   String _getString(Map<String, dynamic> map, List<String> keys) {
@@ -44,9 +77,6 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
             .doc(widget.foodId)
             .get(),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
           if (!snapshot.hasData || !snapshot.data!.exists) {
             return const Center(child: Text("Không tìm thấy món ăn"));
           }
@@ -59,9 +89,15 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
           final calories = _getString(food, ['calories', 'kcal']);
           final diet = _getString(food, ['diet']);
           final ingredients = _getString(food, ['ingredients']);
-          final instructions = _getString(food, ['instructions', 'steps']);
+          final instrData = food['instructions'];
+          if (instrData != null) {
+            if (instrData is String) {
+              instructions = instrData;
+            } else if (instrData is List<dynamic>) {
+              instructions = instrData.join("\n");
+            }
+          }
 
-          // Thông tin người đăng (có fallback cho dữ liệu cũ)
           final authorId = _getString(food, [
             'authorId',
             'authorID',
@@ -84,20 +120,17 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
             'avatar',
           ]);
 
-          // Khởi tạo video (chỉ khi có link)
           if (videoUrl.isNotEmpty && !_isVideoReady) {
-            _videoController =
-                VideoPlayerController.networkUrl(Uri.parse(videoUrl))
-                  ..initialize().then((_) {
-                    if (mounted) setState(() => _isVideoReady = true);
-                  });
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _setupVideo(videoUrl);
+            });
           }
 
           return SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // --- Ảnh món ăn ---
+                // Ảnh món ăn
                 imageUrl.isNotEmpty
                     ? Image.network(
                         imageUrl,
@@ -111,8 +144,8 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
                         color: Colors.grey.shade300,
                         child: const Icon(Icons.fastfood, size: 80),
                       ),
+                const SizedBox(height: 12),
 
-                // --- Thông tin ---
                 Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
@@ -135,10 +168,9 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
                           "Chế độ ăn: $diet",
                           style: const TextStyle(fontSize: 16),
                         ),
-
                       const SizedBox(height: 12),
 
-                      // --- Khu vực người đăng (bấm để vào profile nếu có authorId) ---
+                      // Người đăng
                       _AuthorSection(
                         authorId: authorId,
                         fallbackName: authorNameFb.isEmpty
@@ -151,13 +183,11 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
                       const Divider(),
                       const SizedBox(height: 12),
 
-                      // --- Nguyên liệu ---
+                      // Nguyên liệu
                       const Text(
                         "Nguyên liệu:",
                         style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
+                            fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                       Text(
                         ingredients.isEmpty ? 'Không có' : ingredients,
@@ -165,13 +195,11 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
                       ),
                       const SizedBox(height: 20),
 
-                      // --- Hướng dẫn ---
+                      // Hướng dẫn
                       const Text(
                         "Hướng dẫn nấu:",
                         style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
+                            fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                       Text(
                         instructions.isEmpty
@@ -184,57 +212,56 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
                   ),
                 ),
 
-                // --- Video hướng dẫn ---
-                if (videoUrl.isNotEmpty)
+                // Video
+                if (videoUrl.isNotEmpty && _videoController != null)
                   Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
                           "🎬 Video hướng dẫn:",
                           style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
+                              fontSize: 18, fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 8),
-                        if (_isVideoReady && _videoController != null)
-                          AspectRatio(
-                            aspectRatio: _videoController!.value.aspectRatio,
-                            child: VideoPlayer(_videoController!),
-                          )
-                        else
-                          const Center(
-                            child: Padding(
-                              padding: EdgeInsets.all(12.0),
-                              child: CircularProgressIndicator(),
-                            ),
-                          ),
-                        if (_isVideoReady && _videoController != null)
-                          IconButton(
-                            icon: Icon(
-                              _videoController!.value.isPlaying
-                                  ? Icons.pause
-                                  : Icons.play_arrow,
-                              size: 40,
-                            ),
-                            onPressed: () {
-                              setState(() {
-                                _videoController!.value.isPlaying
-                                    ? _videoController!.pause()
-                                    : _videoController!.play();
-                              });
-                            },
-                          ),
+                        AspectRatio(
+                          aspectRatio: _videoController!.value.aspectRatio,
+                          child: VideoPlayer(_videoController!),
+                        ),
+                        VideoProgressIndicator(_videoController!,
+                            allowScrubbing: true),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            IconButton(
+                                icon: const Icon(Icons.replay_10),
+                                onPressed: () =>
+                                    _seekBy(const Duration(seconds: -10))),
+                            IconButton(
+                                icon: Icon(_videoController!.value.isPlaying
+                                    ? Icons.pause
+                                    : Icons.play_arrow),
+                                onPressed: _togglePlayPause),
+                            IconButton(
+                                icon: const Icon(Icons.forward_10),
+                                onPressed: () =>
+                                    _seekBy(const Duration(seconds: 10))),
+                            IconButton(
+                                icon: const Icon(Icons.fast_forward),
+                                onPressed: () => _changeSpeed(0.25)),
+                            IconButton(
+                                icon: const Icon(Icons.fast_rewind),
+                                onPressed: () => _changeSpeed(-0.25)),
+                            Text(
+                                '${_videoController!.value.playbackSpeed.toStringAsFixed(2)}x')
+                          ],
+                        ),
+                        const SizedBox(height: 16),
                       ],
                     ),
                   ),
-
-                const SizedBox(height: 20),
               ],
             ),
           );
@@ -257,7 +284,6 @@ class _AuthorSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Nếu thiếu authorId (bài cũ), chỉ hiển thị fallback, không điều hướng
     if (authorId.isEmpty) {
       return Row(
         children: [
@@ -275,9 +301,7 @@ class _AuthorSection extends StatelessWidget {
               Text(
                 fallbackName,
                 style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
+                    fontSize: 16, fontWeight: FontWeight.w600),
               ),
               const Text(
                 'Người đăng',
@@ -289,11 +313,8 @@ class _AuthorSection extends StatelessWidget {
       );
     }
 
-    // Có authorId: đọc users/{authorId} realtime để hiện đúng tên/ảnh và cho phép điều hướng
-    final userDocStream = FirebaseFirestore.instance
-        .collection('users')
-        .doc(authorId)
-        .snapshots();
+    final userDocStream =
+        FirebaseFirestore.instance.collection('users').doc(authorId).snapshots();
 
     return InkWell(
       onTap: () {
@@ -309,9 +330,7 @@ class _AuthorSection extends StatelessWidget {
           final displayName = (data?['displayName'] ?? '').toString().trim();
           final photoURL = (data?['photoURL'] ?? '').toString().trim();
 
-          final nameToShow = displayName.isNotEmpty
-              ? displayName
-              : fallbackName;
+          final nameToShow = displayName.isNotEmpty ? displayName : fallbackName;
           final photoToShow = photoURL.isNotEmpty ? photoURL : fallbackPhotoURL;
 
           return Row(
@@ -330,9 +349,7 @@ class _AuthorSection extends StatelessWidget {
                   Text(
                     nameToShow,
                     style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
+                        fontSize: 16, fontWeight: FontWeight.w600),
                   ),
                   const Text(
                     'Người đăng',

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+// import 'package:firebase_auth/firebase_auth.dart';
 import 'edit_food_page.dart';
 
 class ManageFoodPage extends StatefulWidget {
@@ -79,6 +80,50 @@ class _ManageFoodPageState extends State<ManageFoodPage> {
               final food = foods[index];
               final data = food.data() as Map<String, dynamic>;
 
+// <<<<<<< HEAD
+//               final locked = data['isLocked'] ?? false;
+//               final isOwner = data['authorId'] == user.uid;
+
+//               return Card(
+//                 margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+//                 child: ListTile(
+//                   leading: data['image_url'] != null && data['image_url'] != ''
+//                       ? ClipRRect(
+//                           borderRadius: BorderRadius.circular(8),
+//                           child: Image.network(
+//                             data['image_url'],
+//                             width: 60,
+//                             height: 60,
+//                             fit: BoxFit.cover,
+//                           ),
+//                         )
+//                       : const Icon(Icons.image_not_supported),
+//                   title: Text(
+//                     data['name'] ?? 'Không có tên',
+//                     style: TextStyle(
+//                       fontWeight: FontWeight.bold,
+//                       color: locked ? Colors.grey : Colors.black,
+//                     ),
+//                   ),
+//                   subtitle: Text('Người đăng: ${data['authorEmail'] ?? 'Ẩn danh'}'),
+//                   trailing: PopupMenuButton<String>(
+//                     onSelected: (value) async {
+//                       if (value == 'delete') {
+//                         await FirebaseFirestore.instance.collection('foods').doc(food.id).delete();
+//                       } else if (value == 'lock' && role == 'admin') {
+//                         await FirebaseFirestore.instance.collection('foods').doc(food.id).update({'isLocked': true});
+//                       } else if (value == 'unlock' && role == 'admin') {
+//                         await FirebaseFirestore.instance.collection('foods').doc(food.id).update({'isLocked': false});
+//                       }
+//                     },
+//                     itemBuilder: (context) => [
+//                       if (role == 'admin' && !locked)
+//                         const PopupMenuItem(value: 'lock', child: Text('Khóa bài viết')),
+//                       if (role == 'admin' && locked)
+//                         const PopupMenuItem(value: 'unlock', child: Text('Mở khóa bài viết')),
+//                       if (role == 'admin' || isOwner)
+//                         const PopupMenuItem(value: 'delete', child: Text('Xóa bài viết')),
+// =======
               return Card(
                 margin: const EdgeInsets.symmetric(vertical: 8),
                 shape: RoundedRectangleBorder(
