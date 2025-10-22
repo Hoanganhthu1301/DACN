@@ -3,6 +3,9 @@ import 'package:video_player/video_player.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../profile/profile_screen.dart'; // import trang profile người đăng
 
+// Thêm import nút tải PDF
+import '../../widgets/download_recipe_button.dart';
+
 class FoodDetailScreen extends StatefulWidget {
   final String foodId;
   const FoodDetailScreen({super.key, required this.foodId});
@@ -70,7 +73,13 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Chi tiết món ăn")),
+      appBar: AppBar(
+        title: const Text("Chi tiết món ăn"),
+        actions: [
+          // Nút tải PDF hướng dẫn (lưu vào Downloads)
+          DownloadRecipeButton(foodId: widget.foodId),
+        ],
+      ),
       body: FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
         future: FirebaseFirestore.instance
             .collection('foods')
