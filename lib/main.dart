@@ -1,17 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'screens/account/login_screen.dart';
 import 'screens/home/home_screen.dart';
 import 'services/auth_service.dart';
 import 'screens/dashboard_screen.dart';
-import 'package:flutter/foundation.dart'; // Thêm dòng này
+import 'package:flutter/foundation.dart';
+
+// THÊM import này
+import 'core/push/push_bootstrap.dart';
+
+// TOP-LEVEL: handler cho data-only khi app nền/đóng
+@pragma('vm:entry-point')
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   if (kIsWeb) {
-    // Chỉ Web mới cần FirebaseOptions
     await Firebase.initializeApp(
       options: const FirebaseOptions(
         apiKey: "AIzaSyCvPd_JLGFlHVyJ3WR2eCyy1YtCaHTuJ-o",
@@ -24,16 +33,19 @@ void main() async {
       ),
     );
   } else {
-    // Android / iOS tự lấy config từ file google-services.json / GoogleService-Info.plist
     await Firebase.initializeApp();
   }
+
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+
+  // GỌI HÀM NÀY để mỗi lần đăng nhập sẽ lưu token vào users/{uid}/fcmTokens/{token}
+  PushBootstrap.start();
 
   runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -50,11 +62,9 @@ class MyApp extends StatelessWidget {
 
 class AuthWrapper extends StatelessWidget {
   const AuthWrapper({super.key});
-
   @override
   Widget build(BuildContext context) {
     final AuthService authService = AuthService();
-
     return StreamBuilder<User?>(
       stream: authService.authStateChanges,
       builder: (context, snapshot) {
@@ -63,9 +73,7 @@ class AuthWrapper extends StatelessWidget {
             body: Center(child: CircularProgressIndicator()),
           );
         }
-        if (snapshot.hasData) {
-          return const DashboardScreen();
-        }
+        if (snapshot.hasData) return const DashboardScreen();
         return const LoginScreen();
       },
     );

@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+// 🔔 Thêm các import mới
+import '../../widgets/notifications_button.dart';
+import '../../core/push/push_service_min.dart';
+
 import '../food/add_food_page.dart';
-//import 'food/edit_food_page.dart';
 import '../food/food_detail_screen.dart';
 import '../food/saved_foods_page.dart';
 import '../../services/like_service.dart';
@@ -18,8 +21,17 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final foods = FirebaseFirestore.instance.collection('foods');
   final _likeSvc = LikeService();
+  final _push = PushServiceMin(); // 🔔 Khởi tạo push service
 
   String searchQuery = '';
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _push.init(context: context); // 🔔 Khởi tạo thông báo đẩy
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -30,18 +42,9 @@ class _HomeScreenState extends State<HomeScreen> {
         title: const Text('Trang chủ'),
         backgroundColor: Colors.green,
         centerTitle: true,
-        actions: [
-          // Lối tắt tới "Món đã lưu"
-          IconButton(
-            tooltip: 'Món đã lưu',
-            icon: const Icon(Icons.bookmark),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const SavedFoodsPage()),
-              );
-            },
-          ),
+        actions: const [
+          NotificationsButton(),
+          // 🔔 Nút chuông góc phải
         ],
       ),
       body: Padding(
@@ -73,7 +76,6 @@ class _HomeScreenState extends State<HomeScreen> {
               child: ListView(
                 scrollDirection: Axis.horizontal,
                 children: [
-                  // Card "Yêu thích" → mở danh sách món đã lưu (Saved)
                   _buildFeatureCard(
                     'Yêu thích',
                     Icons.favorite,
@@ -162,13 +164,12 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                             );
                           },
-                          // Nút tim + số lượt thích + nút lưu
                           trailing: SizedBox(
                             width: 120,
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                // Like
+                                // ❤️ Like
                                 StreamBuilder<bool>(
                                   stream: _likeSvc.isLikedStream(food.id),
                                   initialData: false,
@@ -191,7 +192,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                     );
                                   },
                                 ),
-                                // Count
+                                // 🔢 Số lượt thích
                                 StreamBuilder<int>(
                                   stream: _likeSvc.likesCount(food.id),
                                   builder: (context, s) {
@@ -203,7 +204,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   },
                                 ),
                                 const SizedBox(width: 8),
-                                // Save
+                                // 🔖 Lưu món
                                 StreamBuilder<bool>(
                                   stream: _likeSvc.isSavedStream(food.id),
                                   initialData: false,
@@ -225,23 +226,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                     );
                                   },
                                 ),
-                                // Bạn có thể giữ menu Sửa tại đây nếu muốn, nhưng sẽ chật.
-                                // Popup menu sửa:
-                                // PopupMenuButton(
-                                //   onSelected: (value) async {
-                                //     if (value == 'edit') {
-                                //       Navigator.push(
-                                //         context,
-                                //         MaterialPageRoute(
-                                //           builder: (_) => EditFoodPage(foodId: food.id, data: food),
-                                //         ),
-                                //       );
-                                //     }
-                                //   },
-                                //   itemBuilder: (context) => const [
-                                //     PopupMenuItem(value: 'edit', child: Text('Sửa')),
-                                //   ],
-                                // ),
                               ],
                             ),
                           ),
@@ -268,7 +252,6 @@ class _HomeScreenState extends State<HomeScreen> {
     return GestureDetector(
       onTap: onTap,
       child: Card(
-        // Nếu withValues không hỗ trợ SDK của bạn, đổi thành withOpacity(0.1)
         color: color.withValues(alpha: 0.1),
         margin: const EdgeInsets.only(right: 10),
         elevation: 2,

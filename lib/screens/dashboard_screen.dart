@@ -31,12 +31,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
           .doc(currentUserId)
           .get();
 
+      // Kiểm tra component còn tồn tại trước khi cập nhật state
+      if (!mounted) return;
+
       String role = userDoc['role'] ?? 'user';
 
       setState(() {
         userRole = role;
 
-        // 👉 Nếu là admin thì có thêm trang "Quản lý"
+        // Nếu là admin thì có thêm trang "Quản lý"
         if (userRole == 'admin') {
           _pages = [
             const HomeScreen(),
@@ -44,12 +47,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ProfileScreen(userId: currentUserId),
           ];
         } else {
-          // 👉 User chỉ có Trang chủ và Cá nhân
+          // User chỉ có Trang chủ và Cá nhân
           _pages = [const HomeScreen(), ProfileScreen(userId: currentUserId)];
         }
       });
     } catch (e) {
-      print('Lỗi lấy role: $e');
+      // === THAY ĐỔI Ở ĐÂY ===
+      debugPrint('Lỗi lấy role: $e');
+      // =======================
+
+      if (!mounted) return;
+
       setState(() {
         userRole = 'user';
         _pages = [const HomeScreen(), ProfileScreen(userId: currentUserId)];
@@ -59,6 +67,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Hiển thị màn hình loading trong khi userRole chưa được tải xong
     if (userRole.isEmpty) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
