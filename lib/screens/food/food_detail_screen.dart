@@ -112,37 +112,48 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
 
                 // --- Video hướng dẫn ---
                 if (videoUrl.isNotEmpty)
-                  Column(
-                    children: [
-                      if (_isVideoReady && _videoController != null)
-                        AspectRatio(
-                          aspectRatio: _videoController!.value.aspectRatio,
-                          child: VideoPlayer(_videoController!),
-                        )
-                      else
-                        const Center(
-                            child: Padding(
-                          padding: EdgeInsets.all(12.0),
-                          child: CircularProgressIndicator(),
-                        )),
-                      if (_isVideoReady && _videoController != null)
-                        IconButton(
-                          icon: Icon(
-                            _videoController!.value.isPlaying
-                                ? Icons.pause
-                                : Icons.play_arrow,
-                            size: 40,
-                          ),
-                          onPressed: () {
-                            setState(() {
-                              _videoController!.value.isPlaying
-                                  ? _videoController!.pause()
-                                  : _videoController!.play();
-                            });
-                          },
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          "🎬 Video hướng dẫn:",
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                         ),
-                    ],
+                        const SizedBox(height: 8),
+                        if (_isVideoReady && _videoController != null)
+                          AspectRatio(
+                            aspectRatio: _videoController!.value.aspectRatio,
+                            child: VideoPlayer(_videoController!),
+                          )
+                        else
+                          const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(12.0),
+                              child: CircularProgressIndicator(),
+                            ),
+                          ),
+                        if (_isVideoReady && _videoController != null)
+                          IconButton(
+                            icon: Icon(
+                              _videoController!.value.isPlaying
+                                  ? Icons.pause
+                                  : Icons.play_arrow,
+                              size: 40,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _videoController!.value.isPlaying
+                                    ? _videoController!.pause()
+                                    : _videoController!.play();
+                              });
+                            },
+                          ),
+                      ],
+                    ),
                   ),
+
                 const SizedBox(height: 20),
               ],
             ),

@@ -2,10 +2,10 @@
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:fluttertoast/fluttertoast.dart';
-import 'package:flutter/material.dart'; // Bắt buộc để dùng Colors và debugPrint
+import 'package:flutter/material.dart'; 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/app_user.dart'; // Bắt buộc cho getUsers()
-//import 'package:flutter/foundation.dart'; // Để dùng debugPrint
+//import 'package:flutter/foundation.dart'; // Dùng cho debugPrint
 
 // ignore_for_file: library_private_types_in_public_api, depend_on_referenced_packages
 
@@ -29,7 +29,7 @@ class AuthService {
   // =================================================================
   // ĐĂNG KÝ VÀ PHÂN QUYỀN BAN ĐẦU
   // =================================================================
-  // Cập nhật để nhận displayName và lưu tất cả vào Firestore
+  
   Future<User?> register(
     String email, 
     String password, [
@@ -71,7 +71,7 @@ class AuthService {
   // =================================================================
   // ĐĂNG NHẬP (BAO GỒM KIỂM TRA KHÓA TÀI KHOẢN)
   // =================================================================
-  // Tên hàm được giữ là 'login' để khớp với LoginScreen
+  
   Future<User?> login(String email, String password) async {
     try {
       final UserCredential result = await _auth.signInWithEmailAndPassword(
@@ -106,7 +106,7 @@ class AuthService {
   }
 
   // =================================================================
-  // CHỨC NĂNG PHÂN QUYỀN
+  // CHỨC NĂNG PHÂN QUYỀN VÀ QUẢN LÝ USER
   // =================================================================
   
   // Lấy vai trò (role) của người dùng hiện tại từ Firestore

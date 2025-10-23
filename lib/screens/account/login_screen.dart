@@ -1,7 +1,6 @@
 // lib/screens/account/login_screen.dart
 
 import 'package:flutter/material.dart';
-// ignore: depend_on_referenced_packages
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/auth_service.dart';
 import '../../services/profile_service.dart'; // Giữ lại import này
@@ -36,7 +35,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() => _isLoading = true);
     
-    // Khối try-catch để bắt các ngoại lệ không phải Auth (ví dụ: lỗi mạng, lỗi Firestore)
+    // Khối try-catch để bắt các ngoại lệ không phải Auth
     try {
       // 1. Thực hiện Đăng nhập (Bao gồm kiểm tra isLocked trong AuthService)
       User? user = await _authService.login(
@@ -50,21 +49,19 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() => _isLoading = false);
 
       if (user != null) {
-        // ==> LOGIC TÍCH HỢP TỪ NHÁNH THU: Đảm bảo Document User tồn tại
-        // Điều này rất quan trọng nếu bạn có logic đăng nhập từ bên ngoài Auth (ví dụ: Google/Apple)
-        // Dù bạn đã làm trong register, nhưng đây là lưới an toàn.
+        // ==> 3. HỢP NHẤT LOGIC: Đảm bảo Document User tồn tại (từ nhánh 2abda9a...)
         await ProfileService().ensureUserDoc(user); 
 
-        // 3. Kiểm tra mounted sau ProfileService (QUAN TRỌNG)
+        // 4. Kiểm tra mounted sau ProfileService (QUAN TRỌNG)
         if (!mounted) return;
         
-        // 4. Đăng nhập thành công, lấy vai trò
+        // 5. Đăng nhập thành công, lấy vai trò (từ HEAD)
         final role = await _authService.getCurrentUserRole();
 
-        // 5. Kiểm tra mounted lần hai sau await vai trò (QUAN TRỌNG)
+        // 6. Kiểm tra mounted lần hai sau await vai trò (QUAN TRỌNG)
         if (!mounted) return;
 
-        // 6. Chuyển hướng dựa trên vai trò
+        // 7. Chuyển hướng dựa trên vai trò
         if (role == 'admin') {
           // Admin đi thẳng vào màn hình quản lý người dùng
           Navigator.pushReplacement(
@@ -88,6 +85,7 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
+      // Giữ lại cách hiển thị lỗi hệ thống từ nhánh HEAD (hoặc nhánh thu, miễn là có context)
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Lỗi hệ thống: ${e.toString()}')),
       );
