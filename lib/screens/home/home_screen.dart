@@ -1,15 +1,20 @@
+// lib/screens/home/home_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart'; 
+import '../../services/like_service.dart';
+import '../../services/auth_service.dart'; 
+import '../account/user_management_screen.dart'; 
 
-// 🔔 Thêm các import mới
 import '../../widgets/notifications_button.dart';
 import '../../core/push/push_service_min.dart';
 
 import '../food/add_food_page.dart';
 import '../food/food_detail_screen.dart';
+import '../food/edit_food_page.dart'; 
 import '../food/saved_foods_page.dart';
-import '../../services/like_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -20,45 +25,90 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final foods = FirebaseFirestore.instance.collection('foods');
-  final _likeSvc = LikeService();
-  final _push = PushServiceMin(); // 🔔 Khởi tạo push service
+  // Khai báo Services, sẽ được gán trong didChangeDependencies
+  late LikeService _likeSvc; 
+  late AuthService _authService;
+
+  final _push = PushServiceMin(); 
 
   String searchQuery = '';
+  
+  // LOGIC PHÂN QUYỀN
+  String _currentUserRole = 'guest'; 
+  bool get _isAdmin => _currentUserRole == 'admin'; // Kiểm tra quyền Admin
+  
+  // Lấy UID ở đây để dùng trong build
+  final String? uid = FirebaseAuth.instance.currentUser?.uid; 
+  bool get _isLoggedIn => uid != null; // Quyền CRUD mở rộng cho tất cả user đã đăng nhập
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _push.init(context: context); // 🔔 Khởi tạo thông báo đẩy
+      _push.init(context: context); 
     });
+  }
+  
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Lấy các Service qua Provider
+    _authService = context.read<AuthService>();
+    _likeSvc = context.read<LikeService>();
+    // Tải vai trò ngay sau khi lấy được AuthService
+    _loadUserRole(); 
+  }
+
+
+  Future<void> _loadUserRole() async {
+    final role = await _authService.getCurrentUserRole();
+    if (mounted) {
+      setState(() {
+        _currentUserRole = role;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final String? uid = FirebaseAuth.instance.currentUser?.uid;
+    // Xác định widget Leading (Nút Admin)
+    final Widget? leadingWidget = _isAdmin
+        ? IconButton(
+            icon: const Icon(Icons.group, color: Colors.white),
+            tooltip: 'Quản lý Người dùng',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const UserManagementScreen()),
+              );
+            },
+          )
+        : null; // Không hiển thị gì nếu không phải admin
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Trang chủ'),
         backgroundColor: Colors.green,
         centerTitle: true,
+        
+        // ==> ĐẶT NÚT ADMIN Ở VỊ TRÍ LEADING (Góc trái) <==
+        leading: leadingWidget,
+        
         actions: const [
+          // Nút Thông báo (giữ nguyên ở bên phải)
           NotificationsButton(),
-          // 🔔 Nút chuông góc phải
         ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(10.0),
         child: Column(
           children: [
-            // 🔍 Thanh tìm kiếm
+            // 🔍 Thanh tìm kiếm (Giữ nguyên)
             TextField(
               decoration: InputDecoration(
                 hintText: 'Tìm kiếm món ăn...',
                 prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(20)),
                 filled: true,
                 fillColor: Colors.white,
               ),
@@ -76,6 +126,7 @@ class _HomeScreenState extends State<HomeScreen> {
               child: ListView(
                 scrollDirection: Axis.horizontal,
                 children: [
+                  // Yêu thích
                   _buildFeatureCard(
                     'Yêu thích',
                     Icons.favorite,
@@ -83,9 +134,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(
-                          builder: (_) => const SavedFoodsPage(),
-                        ),
+                        MaterialPageRoute(builder: (_) => const SavedFoodsPage()),
                       );
                     },
                   ),
@@ -95,12 +144,15 @@ class _HomeScreenState extends State<HomeScreen> {
                     Colors.green,
                     () {},
                   ),
-                  _buildFeatureCard('Thêm món', Icons.add, Colors.orange, () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const AddFoodPage()),
-                    );
-                  }),
+                  
+                  // Thêm món (HIỂN THỊ CHO TẤT CẢ USER ĐÃ ĐĂNG NHẬP)
+                  if (_isLoggedIn)
+                    _buildFeatureCard('Thêm món', Icons.add, Colors.orange, () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const AddFoodPage()),
+                      );
+                    }),
                 ],
               ),
             ),
@@ -109,9 +161,7 @@ class _HomeScreenState extends State<HomeScreen> {
             // 🍜 Danh sách món ăn
             Expanded(
               child: StreamBuilder<QuerySnapshot>(
-                stream: foods
-                    .orderBy('created_at', descending: true)
-                    .snapshots(),
+                stream: foods.orderBy('created_at', descending: true).snapshots(),
                 builder: (context, snapshot) {
                   if (!snapshot.hasData) {
                     return const Center(child: CircularProgressIndicator());
@@ -123,9 +173,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   }).toList();
 
                   if (docs.isEmpty) {
-                    return const Center(
-                      child: Text('Không tìm thấy món ăn nào!'),
-                    );
+                    return const Center(child: Text('Không tìm thấy món ăn nào!'));
                   }
 
                   return ListView.builder(
@@ -133,101 +181,100 @@ class _HomeScreenState extends State<HomeScreen> {
                     itemBuilder: (context, i) {
                       final food = docs[i];
                       return Card(
-                        margin: const EdgeInsets.symmetric(
-                          vertical: 6,
-                          horizontal: 4,
-                        ),
+                        margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
                         child: ListTile(
-                          leading:
-                              food['image_url'] != null &&
-                                  food['image_url'] != ''
+                          leading: food['image_url'] != null && food['image_url'] != ''
                               ? ClipRRect(
                                   borderRadius: BorderRadius.circular(6),
                                   child: Image.network(
                                     food['image_url'],
-                                    width: 60,
-                                    height: 60,
-                                    fit: BoxFit.cover,
+                                    width: 60, height: 60, fit: BoxFit.cover,
                                   ),
                                 )
                               : const Icon(Icons.fastfood, size: 40),
                           title: Text(food['name']),
-                          subtitle: Text(
-                            'Calo: ${food['calories']} kcal | Chế độ: ${food['diet']}',
-                          ),
+                          subtitle: Text('Calo: ${food['calories']} kcal | Chế độ: ${food['diet']}'),
                           onTap: () {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) =>
-                                    FoodDetailScreen(foodId: food.id),
+                                builder: (_) => FoodDetailScreen(foodId: food.id),
                               ),
                             );
                           },
-                          trailing: SizedBox(
-                            width: 120,
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                // ❤️ Like
-                                StreamBuilder<bool>(
-                                  stream: _likeSvc.isLikedStream(food.id),
-                                  initialData: false,
-                                  builder: (context, s) {
-                                    final liked = s.data ?? false;
-                                    return IconButton(
-                                      tooltip: liked ? 'Bỏ thích' : 'Thích',
-                                      onPressed: uid == null
-                                          ? null
-                                          : () => _likeSvc.toggleLike(
-                                              food.id,
-                                              liked,
-                                            ),
-                                      icon: Icon(
-                                        liked
-                                            ? Icons.favorite
-                                            : Icons.favorite_border,
-                                        color: liked ? Colors.pink : null,
+                          
+                          // ==> TRAILING: LIKE, COUNT, SAVE VÀ POPUPMENU (SỬA/XÓA)
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // ❤️ Like & Count
+                              StreamBuilder<bool>(
+                                stream: _likeSvc.isLikedStream(food.id),
+                                initialData: false,
+                                builder: (context, s) {
+                                  final liked = s.data ?? false;
+                                  return Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        tooltip: liked ? 'Bỏ thích' : 'Thích',
+                                        onPressed: uid == null ? null : () => _likeSvc.toggleLike(food.id, liked),
+                                        icon: Icon(liked ? Icons.favorite : Icons.favorite_border, color: liked ? Colors.pink : null),
                                       ),
-                                    );
-                                  },
-                                ),
-                                // 🔢 Số lượt thích
-                                StreamBuilder<int>(
-                                  stream: _likeSvc.likesCount(food.id),
-                                  builder: (context, s) {
-                                    final count = s.data ?? 0;
-                                    return Text(
-                                      '$count',
-                                      style: const TextStyle(fontSize: 12),
-                                    );
-                                  },
-                                ),
-                                const SizedBox(width: 8),
-                                // 🔖 Lưu món
-                                StreamBuilder<bool>(
-                                  stream: _likeSvc.isSavedStream(food.id),
-                                  initialData: false,
-                                  builder: (context, s) {
-                                    final saved = s.data ?? false;
-                                    return IconButton(
-                                      tooltip: saved ? 'Bỏ lưu' : 'Lưu',
-                                      onPressed: uid == null
-                                          ? null
-                                          : () => _likeSvc.toggleSave(
-                                              food.id,
-                                              saved,
-                                            ),
-                                      icon: Icon(
-                                        saved
-                                            ? Icons.bookmark
-                                            : Icons.bookmark_border,
+                                      StreamBuilder<int>(
+                                        stream: _likeSvc.likesCount(food.id),
+                                        builder: (context, s) {
+                                          final count = s.data ?? 0;
+                                          return Text('$count', style: const TextStyle(fontSize: 12));
+                                        },
                                       ),
-                                    );
-                                  },
-                                ),
-                              ],
-                            ),
+                                    ],
+                                  );
+                                },
+                              ),
+                              
+                              const SizedBox(width: 8),
+                              
+                              // 🔖 Lưu món + NÚT SỬA/XÓA
+                              StreamBuilder<bool>(
+                                stream: _likeSvc.isSavedStream(food.id),
+                                initialData: false,
+                                builder: (context, s) {
+                                  final saved = s.data ?? false;
+                                  return Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        tooltip: saved ? 'Bỏ lưu' : 'Lưu',
+                                        onPressed: uid == null ? null : () => _likeSvc.toggleSave(food.id, saved),
+                                        icon: Icon(saved ? Icons.bookmark : Icons.bookmark_border),
+                                      ),
+                                      
+                                      // NÚT SỬA/XÓA (PopupMenuButton) - HIỂN THỊ CHO TẤT CẢ USER ĐÃ ĐĂNG NHẬP
+                                      if (_isLoggedIn) 
+                                        PopupMenuButton(
+                                          onSelected: (value) async {
+                                            if (value == 'edit') {
+                                              // Chuyển đến trang sửa
+                                              Navigator.push(context, MaterialPageRoute(builder: (_) => EditFoodPage(foodId: food.id, data: food)));
+                                            } else if (value == 'delete') {
+                                              // Logic xóa
+                                              await foods.doc(food.id).delete();
+                                              if (context.mounted) {
+                                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã xóa món ăn!')));
+                                              }
+                                            }
+                                          },
+                                          itemBuilder: (context) => const [
+                                            PopupMenuItem(value: 'edit', child: Text('Sửa')),
+                                            PopupMenuItem(value: 'delete', child: Text('Xóa')),
+                                          ],
+                                        ),
+                                    ],
+                                  );
+                                },
+                              ),
+                            ],
                           ),
                         ),
                       );
@@ -252,7 +299,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return GestureDetector(
       onTap: onTap,
       child: Card(
-        color: color.withValues(alpha: 0.1),
+        color: color.withAlpha(25), 
         margin: const EdgeInsets.only(right: 10),
         elevation: 2,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),

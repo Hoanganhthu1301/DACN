@@ -2,13 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'screens/account/login_screen.dart';
-import 'screens/home/home_screen.dart';
-import 'services/auth_service.dart';
-import 'screens/dashboard_screen.dart';
+import 'package:provider/provider.dart'; 
 import 'package:flutter/foundation.dart';
 
-// THÊM import này
+// Imports Services và Screens
+import 'services/auth_service.dart';
+import 'services/food_service.dart'; 
+import 'services/like_service.dart'; // <--- BẮT BUỘC
+import 'models/food_search_state.dart'; 
+import 'screens/account/login_screen.dart';
+import 'screens/dashboard_screen.dart';
+import 'screens/home/home_screen.dart';
 import 'core/push/push_bootstrap.dart';
 
 // TOP-LEVEL: handler cho data-only khi app nền/đóng
@@ -37,11 +41,43 @@ void main() async {
   }
 
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-
-  // GỌI HÀM NÀY để mỗi lần đăng nhập sẽ lưu token vào users/{uid}/fcmTokens/{token}
   PushBootstrap.start();
 
-  runApp(const MyApp());
+  runApp(
+    MultiProvider(
+      providers: [
+        // 1. Cung cấp AuthService
+        Provider<AuthService>(
+          create: (_) => AuthService(),
+        ),
+        
+        // 2. Cung cấp FoodService 
+        Provider<FoodService>(
+          create: (_) => FoodService(),
+        ),
+        
+        // ==> KHẮC PHỤC LỖI: CUNG CẤP LIKESERVICE <==
+        Provider<LikeService>(
+          create: (_) => LikeService(),
+        ),
+        // ==========================================
+
+        // 3. ChangeNotifierProvider cho Trạng thái Tìm kiếm
+        ChangeNotifierProvider<FoodSearchState>(
+          create: (context) => FoodSearchState(
+            context.read<FoodService>(), 
+          ),
+        ),
+        
+        // 4. StreamProvider cho trạng thái Đăng nhập
+        StreamProvider<User?>(
+          create: (context) => context.read<AuthService>().authStateChanges, 
+          initialData: null,
+        ),
+      ],
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -56,6 +92,7 @@ class MyApp extends StatelessWidget {
         '/login': (context) => const LoginScreen(),
         '/home': (context) => const HomeScreen(),
       },
+      debugShowCheckedModeBanner: false, 
     );
   }
 }
@@ -64,18 +101,13 @@ class AuthWrapper extends StatelessWidget {
   const AuthWrapper({super.key});
   @override
   Widget build(BuildContext context) {
-    final AuthService authService = AuthService();
-    return StreamBuilder<User?>(
-      stream: authService.authStateChanges,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
-        if (snapshot.hasData) return const DashboardScreen();
-        return const LoginScreen();
-      },
-    );
+    // Lấy trạng thái USER TỪ PROVIDER
+    final user = context.watch<User?>(); 
+
+    if (user == null) {
+      return const LoginScreen();
+    }
+    
+    return const DashboardScreen();
   }
 }
