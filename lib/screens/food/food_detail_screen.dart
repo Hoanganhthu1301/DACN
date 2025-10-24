@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:video_player/video_player.dart';
+import 'package:provider/provider.dart';
+import '../../services/like_service.dart';
+import '../profile/profile_screen.dart';
 
 class FoodDetailScreen extends StatefulWidget {
   final String foodId;
@@ -13,6 +17,15 @@ class FoodDetailScreen extends StatefulWidget {
 class _FoodDetailScreenState extends State<FoodDetailScreen> {
   VideoPlayerController? _videoController;
   String instructions = '';
+  String categoryType = '';
+  late LikeService _likeSvc;
+  final String? uid = FirebaseAuth.instance.currentUser?.uid;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _likeSvc = context.read<LikeService>();
+  }
 
   @override
   void dispose() {
@@ -20,17 +33,6 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
     super.dispose();
   }
 
-<<<<<<< HEAD
-Future<void> _loadVideo(String url) async {
-  if (url.isEmpty) return;
-
-  _videoController = VideoPlayerController.networkUrl(Uri.parse(url));
-
-  await _videoController!.initialize();
-  setState(() => _isVideoReady = true);
-}
-
-=======
   void _setupVideo(String videoUrl) {
     if (videoUrl.isNotEmpty) {
       _videoController ??= VideoPlayerController.networkUrl(Uri.parse(videoUrl))
@@ -65,50 +67,43 @@ Future<void> _loadVideo(String url) async {
     if (_videoController == null) return;
     final curSpeed = _videoController!.value.playbackSpeed;
     _videoController!.setPlaybackSpeed((curSpeed + delta).clamp(0.25, 3.0));
-    setState(() {}); // cập nhật text tốc độ
+    setState(() {});
   }
->>>>>>> main
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-<<<<<<< HEAD
-      appBar: AppBar(title: const Text("Chi tiết món ăn"), backgroundColor: Colors.green),
-      body: FutureBuilder<DocumentSnapshot>(
-        future: FirebaseFirestore.instance.collection('foods').doc(widget.foodId).get(),
-=======
       appBar: AppBar(title: const Text("Chi tiết món ăn")),
       body: FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
         future: FirebaseFirestore.instance
             .collection('foods')
             .doc(widget.foodId)
             .get(),
->>>>>>> main
         builder: (context, snapshot) {
           if (!snapshot.hasData || !snapshot.data!.exists) {
             return const Center(child: Text("Không tìm thấy món ăn"));
           }
-
-<<<<<<< HEAD
-          final food = snapshot.data!.data() as Map<String, dynamic>;
-          final imageUrl = food['image_url'] ?? '';
-          final videoUrl = food['video_url'] ?? '';
-          debugPrint(" Video URL Firestore: $videoUrl"); 
-          final name = food['name'] ?? 'Không rõ tên';
-          final calories = food['calories']?.toString() ?? '0';
-          final diet = food['diet'] ?? 'Không xác định';
-          final ingredients = food['ingredients'] ?? 'Không có';
-          final instructions = food['instructions'] ?? 'Không có hướng dẫn.';
-
-          // ✅ Chỉ khởi tạo video 1 lần duy nhất
-          if (videoUrl.isNotEmpty && _videoController == null) {
-            _loadVideo(videoUrl);
-=======
           final data = snapshot.data!.data()!;
           final imageUrl = data['image_url'] ?? '';
           final name = data['name'] ?? '';
           final calories = data['calories']?.toString() ?? '0';
-          final diet = data['diet'] ?? '';
+          final diet = data['dietName'] ?? '';
+          final categoryId = data['categoryId'] ?? '';
+
+          if (categoryId.isNotEmpty && categoryType.isEmpty) {
+            FirebaseFirestore.instance
+                .collection('categories')
+                .doc(categoryId)
+                .get()
+                .then((catSnap) {
+              if (catSnap.exists) {
+                setState(() {
+                  categoryType = catSnap.data()?['name'] ?? '';
+                });
+              }
+            });
+}
+// loại hình món ăn
           final videoUrl = data['video_url'] ?? '';
           final ingredients = data['ingredients'] ?? '';
 
@@ -122,12 +117,19 @@ Future<void> _loadVideo(String url) async {
             }
           }
 
-          // --- Setup video lần đầu ---
+          // --- Người đăng ---
+          final authorId = data['authorId'] ??
+              data['uid'] ??
+              data['userId'] ??
+              '';
+          final authorNameFb = data['authorName'] ?? 'Người dùng';
+          final authorPhotoURLFb = data['authorPhotoURL'] ?? '';
+
+          // --- Setup video ---
           if (_videoController == null && videoUrl.isNotEmpty) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               _setupVideo(videoUrl);
             });
->>>>>>> main
           }
 
           return SingleChildScrollView(
@@ -146,34 +148,85 @@ Future<void> _loadVideo(String url) async {
                       ),
                 const SizedBox(height: 12),
 
-                // Thông tin món ăn
                 Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-<<<<<<< HEAD
-                      Text(name, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 8),
-                      Text("Calo: $calories kcal", style: const TextStyle(fontSize: 16)),
-                      Text("Chế độ ăn: $diet", style: const TextStyle(fontSize: 16)),
-                      const SizedBox(height: 16),
-
-                      const Text("Nguyên liệu:", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                      Text(ingredients, style: const TextStyle(fontSize: 16, height: 1.4)),
-                      const SizedBox(height: 20),
-
-                      const Text("Hướng dẫn nấu:", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                      Text(instructions, style: const TextStyle(fontSize: 16, height: 1.4)),
-                      const SizedBox(height: 20),
-=======
-                      Text(name,
-                          style: const TextStyle(
-                              fontSize: 24, fontWeight: FontWeight.bold)),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              name,
+                              style: const TextStyle(
+                                  fontSize: 24, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          // ❤️ Yêu thích
+                          StreamBuilder<bool>(
+                            stream: _likeSvc.isLikedStream(widget.foodId),
+                            initialData: false,
+                            builder: (context, s) {
+                              final liked = s.data ?? false;
+                              return IconButton(
+                                tooltip: liked ? 'Bỏ thích' : 'Thích',
+                                onPressed: uid == null
+                                    ? null
+                                    : () => _likeSvc.toggleLike(
+                                          widget.foodId,
+                                          liked,
+                                        ),
+                                icon: Icon(
+                                  liked
+                                      ? Icons.favorite
+                                      : Icons.favorite_border,
+                                  color: liked ? Colors.pink : Colors.grey,
+                                ),
+                              );
+                            },
+                          ),
+                          // 🔖 Lưu món
+                          StreamBuilder<bool>(
+                            stream: _likeSvc.isSavedStream(widget.foodId),
+                            initialData: false,
+                            builder: (context, s) {
+                              final saved = s.data ?? false;
+                              return IconButton(
+                                tooltip: saved ? 'Bỏ lưu' : 'Lưu',
+                                onPressed: uid == null
+                                    ? null
+                                    : () => _likeSvc.toggleSave(
+                                          widget.foodId,
+                                          saved,
+                                        ),
+                                icon: Icon(
+                                  saved
+                                      ? Icons.bookmark
+                                      : Icons.bookmark_border,
+                                  color: saved ? Colors.blue : Colors.grey,
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
                       const SizedBox(height: 4),
                       Text("Calo: $calories kcal"),
                       if (diet.isNotEmpty) Text("Chế độ ăn: $diet"),
+                      if (categoryType.isNotEmpty) Text("Loại món ăn: $categoryType"),
                       const SizedBox(height: 16),
+
+                      // Người đăng
+                      _AuthorSection(
+                        authorId: authorId,
+                        fallbackName: authorNameFb,
+                        fallbackPhotoURL: authorPhotoURLFb,
+                      ),
+
+                      const SizedBox(height: 12),
+                      const Divider(),
+                      const SizedBox(height: 12),
 
                       // Nguyên liệu
                       const Text("Nguyên liệu:",
@@ -196,55 +249,10 @@ Future<void> _loadVideo(String url) async {
                         style: const TextStyle(fontSize: 16, height: 1.5),
                       ),
                       const SizedBox(height: 16),
->>>>>>> main
                     ],
                   ),
                 ),
 
-<<<<<<< HEAD
-                // --- Video hướng dẫn ---
-                if (videoUrl.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.all(12.0),
-                    child: Column(
-                      children: [
-                        const Text("Video hướng dẫn:",
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 10),
-                        if (_isVideoReady && _videoController != null)
-                          AspectRatio(
-                            aspectRatio: _videoController!.value.aspectRatio,
-                            child: Stack(
-                              alignment: Alignment.bottomCenter,
-                              children: [
-                                VideoPlayer(_videoController!),
-                                VideoProgressIndicator(_videoController!, allowScrubbing: true),
-                                Center(
-                                  child: IconButton(
-                                    iconSize: 50,
-                                    color: Colors.white,
-                                    icon: Icon(
-                                      _videoController!.value.isPlaying
-                                          ? Icons.pause_circle
-                                          : Icons.play_circle,
-                                    ),
-                                    onPressed: () {
-                                      setState(() {
-                                        if (_videoController!.value.isPlaying) {
-                                          _videoController!.pause();
-                                        } else {
-                                          _videoController!.play();
-                                        }
-                                      });
-                                    },
-                                  ),
-                                ),
-                              ],
-                            ),
-                          )
-                        else
-                          const Center(child: CircularProgressIndicator()),
-=======
                 // Video
                 if (_videoController != null &&
                     _videoController!.value.isInitialized)
@@ -262,7 +270,8 @@ Future<void> _loadVideo(String url) async {
                           children: [
                             IconButton(
                                 icon: const Icon(Icons.replay_10),
-                                onPressed: () => _seekBy(const Duration(seconds: -10))),
+                                onPressed: () =>
+                                    _seekBy(const Duration(seconds: -10))),
                             IconButton(
                                 icon: Icon(_videoController!.value.isPlaying
                                     ? Icons.pause
@@ -270,7 +279,8 @@ Future<void> _loadVideo(String url) async {
                                 onPressed: _togglePlayPause),
                             IconButton(
                                 icon: const Icon(Icons.forward_10),
-                                onPressed: () => _seekBy(const Duration(seconds: 10))),
+                                onPressed: () =>
+                                    _seekBy(const Duration(seconds: 10))),
                             IconButton(
                                 icon: const Icon(Icons.fast_forward),
                                 onPressed: () => _changeSpeed(0.25)),
@@ -282,12 +292,109 @@ Future<void> _loadVideo(String url) async {
                           ],
                         ),
                         const SizedBox(height: 16),
->>>>>>> main
                       ],
                     ),
                   ),
               ],
             ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _AuthorSection extends StatelessWidget {
+  final String authorId;
+  final String fallbackName;
+  final String fallbackPhotoURL;
+
+  const _AuthorSection({
+    required this.authorId,
+    required this.fallbackName,
+    required this.fallbackPhotoURL,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (authorId.isEmpty) {
+      return Row(
+        children: [
+          CircleAvatar(
+            radius: 20,
+            backgroundImage: fallbackPhotoURL.isNotEmpty
+                ? NetworkImage(fallbackPhotoURL)
+                : null,
+            child: fallbackPhotoURL.isEmpty ? const Icon(Icons.person) : null,
+          ),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                fallbackName,
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+              const Text(
+                'Người đăng',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ],
+          ),
+        ],
+      );
+    }
+
+    final userDocStream =
+        FirebaseFirestore.instance.collection('users').doc(authorId).snapshots();
+
+    return InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => ProfileScreen(userId: authorId)),
+        );
+      },
+      child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+        stream: userDocStream,
+        builder: (context, snap) {
+          final data = snap.data?.data();
+          final displayName = (data?['displayName'] ?? '').toString().trim();
+          final photoURL = (data?['photoURL'] ?? '').toString().trim();
+
+          final nameToShow =
+              displayName.isNotEmpty ? displayName : fallbackName;
+          final photoToShow =
+              photoURL.isNotEmpty ? photoURL : fallbackPhotoURL;
+
+          return Row(
+            children: [
+              CircleAvatar(
+                radius: 20,
+                backgroundImage: photoToShow.isNotEmpty
+                    ? NetworkImage(photoToShow)
+                    : null,
+                child: photoToShow.isEmpty ? const Icon(Icons.person) : null,
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    nameToShow,
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                  const Text(
+                    'Người đăng',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ],
+              ),
+              const Spacer(),
+              const Icon(Icons.chevron_right),
+            ],
           );
         },
       ),

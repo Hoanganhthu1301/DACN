@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'notification_service.dart';
 
 class FollowService {
   final _db = FirebaseFirestore.instance;
@@ -20,7 +21,7 @@ class FollowService {
     return snap.exists;
   }
 
-  // Theo dõi B (ghi 2 chiều)
+  // Theo dõi B (ghi 2 chiều) + tạo thông báo cho B
   Future<void> follow(String targetUid) async {
     final uid = _uid;
     if (uid == null) throw Exception('Bạn cần đăng nhập');
@@ -41,6 +42,9 @@ class FollowService {
     batch.set(followerRef, {'createdAt': FieldValue.serverTimestamp()});
     batch.set(followingRef, {'createdAt': FieldValue.serverTimestamp()});
     await batch.commit();
+
+    // Ghi thông báo vào Firestore (dùng cho Notification Center + trigger push)
+    await NotificationService().addFollowNotification(targetUid: targetUid);
   }
 
   // Hủy theo dõi B (xóa 2 chiều)
@@ -75,7 +79,7 @@ class FollowService {
           .collection('followers')
           .count()
           .get();
-      return agg.count ?? 0; // FIX: đảm bảo trả về int, không phải int?
+      return agg.count ?? 0;
     } catch (_) {
       final qs = await _db
           .collection('users')
@@ -95,7 +99,7 @@ class FollowService {
           .collection('following')
           .count()
           .get();
-      return agg.count ?? 0; // FIX: đảm bảo trả về int, không phải int?
+      return agg.count ?? 0;
     } catch (_) {
       final qs = await _db
           .collection('users')

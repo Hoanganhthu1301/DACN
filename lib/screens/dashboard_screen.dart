@@ -1,9 +1,12 @@
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'food/manage_food_page.dart'; // Trang quản lý (admin)
 import 'home/home_screen.dart';
 import 'profile/profile_screen.dart';
+// import 'package:firebase_core/firebase_core.dart';
+// import 'dashboard_screen.dart';
 
 import '../category/manage_category_page.dart';
 // import 'package:firebase_core/firebase_core.dart';
@@ -70,11 +73,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
 
     return Scaffold(
-      body: _pages[_currentIndex],
+      body: IndexedStack(
+        index: _currentIndex,
+        children: _pages,
+      ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         selectedItemColor: Colors.orange,
-        onTap: (index) {
+          unselectedItemColor: Colors.grey, // màu cho icon chưa chọn
+          showUnselectedLabels: true,       // 🔹 luôn hiện label cho icon chưa chọn
+          type: BottomNavigationBarType.fixed, // 🔹 giữ cố định layout
+                onTap: (index) {
           setState(() {
             _currentIndex = index;
           });

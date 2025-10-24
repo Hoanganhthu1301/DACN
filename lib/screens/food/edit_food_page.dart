@@ -4,10 +4,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:video_player/video_player.dart';
 
 class EditFoodPage extends StatefulWidget {
   final String foodId;
   final dynamic data;
+
   const EditFoodPage({super.key, required this.foodId, required this.data});
 
   @override
@@ -15,30 +17,45 @@ class EditFoodPage extends StatefulWidget {
 }
 
 class _EditFoodPageState extends State<EditFoodPage> {
-  late TextEditingController _name;
-  late TextEditingController _cal;
-  late TextEditingController _ingredients;
-  late TextEditingController _instructions;
+  final _formKey = GlobalKey<FormState>();
 
-  File? _newImage;
-  File? _newVideo;
-  bool _loading = false;
-  String _diet = 'Mặn';
-  final List<String> _dietOptions = ['Mặn', 'Chay', 'Ăn kiêng', 'Low-carb'];
-  String? currentUserEmail;
-  String? currentUserRole;
+  late TextEditingController _nameController;
+  late TextEditingController _caloriesController;
+  late TextEditingController _ingredientsController;
+  late TextEditingController _instructionsController;
+
+  String? _selectedCategoryId;
+  String? _selectedDietId;
+
+  List<Map<String, dynamic>> _categories = [];
+  List<Map<String, dynamic>> _diets = [];
+
+  bool _isLoading = false;
   bool hasPermission = false;
 
+  File? _imageFile;
+  File? _videoFile;
+  VideoPlayerController? _videoController;
+
+  String? currentUserEmail;
+  String? currentUserRole;
 
   @override
   void initState() {
     super.initState();
-    _name = TextEditingController(text: widget.data['name']);
-    _cal = TextEditingController(text: widget.data['calories'].toString());
-    _ingredients = TextEditingController(text: widget.data['ingredients'] ?? '');
-    _instructions = TextEditingController(text: widget.data['instructions'] ?? '');
-    _diet = widget.data['diet'] ?? 'Mặn';
+    _nameController = TextEditingController(text: widget.data['name']);
+    _caloriesController =
+        TextEditingController(text: widget.data['calories'].toString());
+    _ingredientsController =
+        TextEditingController(text: widget.data['ingredients']);
+    _instructionsController =
+        TextEditingController(text: widget.data['instructions']);
+
+    _selectedCategoryId = widget.data['categoryId'];
+    _selectedDietId = widget.data['dietId'];
+
     _loadUserInfo();
+    _loadCategories();
   }
 
   Future<void> _loadUserInfo() async {
@@ -54,60 +71,99 @@ class _EditFoodPageState extends State<EditFoodPage> {
       currentUserRole = userDoc['role'];
     });
 
-    // --- Kiểm tra quyền ---
-    final createdBy = widget.data['created_by'];
-    final role = widget.data['role'];
-
-    if ((currentUserRole == 'admin' && role == 'admin') ||
-        (currentUserRole == 'user' && createdBy == currentUserEmail)) {
+    final createdBy = widget.data['authorId'];
+    if (currentUserRole == 'admin' || createdBy == user.uid) {
       setState(() => hasPermission = true);
     }
   }
 
+  Future<void> _loadCategories() async {
+    final snapshot = await FirebaseFirestore.instance.collection('categories').get();
+    final all = snapshot.docs.map((doc) => {
+          'id': doc.id,
+          'name': doc['name'],
+          'type': doc['type'], // theo_loai_mon_an / theo_che_do_an
+        }).toList();
+
+    setState(() {
+      _categories = all.where((c) => c['type'] == 'theo_loai_mon_an').toList();
+      _diets = all.where((c) => c['type'] == 'theo_che_do_an').toList();
+    });
+  }
+
   Future<void> _pickImage() async {
-    final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
-    if (picked != null) setState(() => _newImage = File(picked.path));
+    final pickedFile = await ImagePicker().pickImage(source: ImageSource.gallery);
+    if (pickedFile != null) setState(() => _imageFile = File(pickedFile.path));
   }
 
   Future<void> _pickVideo() async {
-    final picked = await ImagePicker().pickVideo(source: ImageSource.gallery);
-    if (picked != null) setState(() => _newVideo = File(picked.path));
+    final pickedFile = await ImagePicker().pickVideo(source: ImageSource.gallery);
+    if (pickedFile != null) {
+      setState(() => _videoFile = File(pickedFile.path));
+      _videoController?.dispose();
+      _videoController = VideoPlayerController.file(_videoFile!)
+        ..initialize().then((_) {
+          setState(() {});
+          _videoController!.play();
+        });
+    }
+  }
+
+  Future<String?> _uploadFile(File file, String folder) async {
+    try {
+      final ref = FirebaseStorage.instance
+          .ref()
+          .child('foods/$folder/${DateTime.now().millisecondsSinceEpoch}');
+      await ref.putFile(file);
+      return await ref.getDownloadURL();
+    } catch (e) {
+      if (!mounted) return null;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Lỗi upload: $e')));
+      return null;
+    }
   }
 
   Future<void> _updateFood() async {
-    if (_name.text.isEmpty || _cal.text.isEmpty) return;
-    setState(() => _loading = true);
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    if (_selectedCategoryId == null || _selectedDietId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vui lòng chọn đủ danh mục và chế độ ăn')),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
 
     try {
       String imageUrl = widget.data['image_url'] ?? '';
       String videoUrl = widget.data['video_url'] ?? '';
 
-      // Upload ảnh mới nếu có
-      if (_newImage != null) {
-        final refImage = FirebaseStorage.instance
-            .ref('foods/images/${DateTime.now().millisecondsSinceEpoch}.jpg');
-        await refImage.putFile(_newImage!);
-        imageUrl = await refImage.getDownloadURL();
-
+      if (_imageFile != null) {
+        final uploaded = await _uploadFile(_imageFile!, 'images');
+        if (uploaded != null) imageUrl = uploaded;
       }
 
-      // Upload video mới nếu có
-      if (_newVideo != null) {
-        final refVideo = FirebaseStorage.instance
-            .ref('foods/videos/${DateTime.now().millisecondsSinceEpoch}.mp4');
-        await refVideo.putFile(_newVideo!);
-        videoUrl = await refVideo.getDownloadURL();
+      if (_videoFile != null) {
+        final uploaded = await _uploadFile(_videoFile!, 'videos');
+        if (uploaded != null) videoUrl = uploaded;
       }
+
+      final category = _categories.firstWhere((e) => e['id'] == _selectedCategoryId);
+      final diet = _diets.firstWhere((e) => e['id'] == _selectedDietId);
 
       await FirebaseFirestore.instance
           .collection('foods')
           .doc(widget.foodId)
           .update({
-        'name': _name.text,
-        'calories': int.parse(_cal.text),
-        'ingredients': _ingredients.text,
-        'instructions': _instructions.text,
-        'diet': _diet,
+        'name': _nameController.text.trim(),
+        'calories': int.tryParse(_caloriesController.text.trim()) ?? 0,
+        'ingredients': _ingredientsController.text.trim(),
+        'instructions': _instructionsController.text.trim(),
+        'categoryId': category['id'],
+        'categoryName': category['name'],
+        'dietId': diet['id'],
+        'dietName': diet['name'],
         'image_url': imageUrl,
         'video_url': videoUrl,
         'updated_at': FieldValue.serverTimestamp(),
@@ -122,11 +178,11 @@ class _EditFoodPageState extends State<EditFoodPage> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Lỗi: $e')),
+        SnackBar(content: Text('Lỗi cập nhật: $e')),
       );
     }
 
-    setState(() => _loading = false);
+    setState(() => _isLoading = false);
   }
 
   @override
@@ -147,69 +203,124 @@ class _EditFoodPageState extends State<EditFoodPage> {
       appBar: AppBar(title: const Text('Sửa món ăn')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            TextField(
-                controller: _name,
-                decoration: const InputDecoration(labelText: 'Tên món')),
-            TextField(
-                controller: _cal,
-                decoration: const InputDecoration(labelText: 'Calo')),
-            TextField(
-                controller: _ingredients,
-                decoration: const InputDecoration(labelText: 'Nguyên liệu')),
-            TextField(
-              controller: _instructions,
-              decoration: const InputDecoration(labelText: 'Hướng dẫn nấu'),
-              maxLines: 4,
-            ),
-            const SizedBox(height: 20),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextFormField(
+                controller: _nameController,
+                decoration: const InputDecoration(labelText: 'Tên món ăn'),
+                validator: (v) => v!.isEmpty ? 'Không được bỏ trống' : null,
+              ),
+              const SizedBox(height: 16),
 
-            DropdownButtonFormField<String>(
-              initialValue: _diet,
-              decoration: const InputDecoration(labelText: 'Chế độ ăn'),
-              items: _dietOptions
-                  .map((diet) => DropdownMenuItem(
-                        value: diet,
-                        child: Text(diet),
-                      ))
-                  .toList(),
-              onChanged: (val) {
-                if (val != null) setState(() => _diet = val);
-              },
-            ),
+              TextFormField(
+                controller: _caloriesController,
+                decoration: const InputDecoration(labelText: 'Lượng calo (kcal)'),
+                keyboardType: TextInputType.number,
+                validator: (v) => v!.isEmpty ? 'Không được bỏ trống' : null,
+              ),
+              const SizedBox(height: 16),
 
-            const SizedBox(height: 20),
-            _newImage != null
-                ? Image.file(_newImage!, width: 120, height: 120, fit: BoxFit.cover)
-                : (widget.data['image_url'] != null
-                    ? Image.network(widget.data['image_url'],
-                        width: 120, height: 120, fit: BoxFit.cover)
-                    : const Text('Chưa có ảnh')),
-            TextButton.icon(
-                onPressed: _pickImage,
-                icon: const Icon(Icons.image),
-                label: const Text('Chọn ảnh')),
+              DropdownButtonFormField<String>(
+                initialValue: _selectedCategoryId,
+                decoration: const InputDecoration(labelText: 'Danh mục món ăn'),
+                items: _categories
+                    .map((cat) => DropdownMenuItem<String>(
+                          value: cat['id'],
+                          child: Text(cat['name']),
+                        ))
+                    .toList(),
+                onChanged: (val) => setState(() => _selectedCategoryId = val),
+              ),
+              const SizedBox(height: 16),
 
-            const SizedBox(height: 10),
-            _newVideo != null
-                ? const Text('Đã chọn video mới ✅')
-                : (widget.data['video_url'] != null
-                    ? const Text('Video hiện tại có sẵn ✅')
-                    : const Text('Chưa có video')),
-            TextButton.icon(
-                onPressed: _pickVideo,
-                icon: const Icon(Icons.video_library),
-                label: const Text('Chọn video')),
+              DropdownButtonFormField<String>(
+                initialValue: _selectedDietId,
+                decoration: const InputDecoration(labelText: 'Chế độ ăn'),
+                items: _diets
+                    .map((diet) => DropdownMenuItem<String>(
+                          value: diet['id'],
+                          child: Text(diet['name']),
+                        ))
+                    .toList(),
+                onChanged: (val) => setState(() => _selectedDietId = val),
+              ),
+              const SizedBox(height: 16),
 
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _loading ? null : _updateFood,
-              child: _loading
-                  ? const CircularProgressIndicator()
-                  : const Text('Cập nhật'),
-            ),
-          ],
+              TextFormField(
+                controller: _ingredientsController,
+                decoration: const InputDecoration(labelText: 'Nguyên liệu'),
+                maxLines: 3,
+                validator: (v) => v!.isEmpty ? 'Không được bỏ trống' : null,
+              ),
+              const SizedBox(height: 16),
+
+              TextFormField(
+                controller: _instructionsController,
+                decoration: const InputDecoration(labelText: 'Các bước thực hiện'),
+                maxLines: 5,
+                validator: (v) => v!.isEmpty ? 'Không được bỏ trống' : null,
+              ),
+              const SizedBox(height: 16),
+
+              if (_imageFile != null)
+                Image.file(_imageFile!, height: 200, fit: BoxFit.cover)
+              else if (widget.data['image_url'] != null &&
+                  widget.data['image_url'].isNotEmpty)
+                Image.network(widget.data['image_url'],
+                    height: 200, fit: BoxFit.cover),
+
+              const SizedBox(height: 8),
+
+              if (_videoFile != null &&
+                  _videoController != null &&
+                  _videoController!.value.isInitialized)
+                AspectRatio(
+                  aspectRatio: _videoController!.value.aspectRatio,
+                  child: VideoPlayer(_videoController!),
+                )
+              else if (widget.data['video_url'] != null &&
+                  widget.data['video_url'].isNotEmpty)
+                const Text('🎬 Video hiện tại có sẵn'),
+
+              const SizedBox(height: 16),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _pickImage,
+                      icon: const Icon(Icons.image),
+                      label: const Text('Chọn ảnh'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _pickVideo,
+                      icon: const Icon(Icons.videocam),
+                      label: const Text('Chọn video'),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+
+              ElevatedButton.icon(
+                onPressed: _isLoading ? null : _updateFood,
+                icon: _isLoading
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(color: Colors.white),
+                      )
+                    : const Icon(Icons.save),
+                label: const Text('Cập nhật món ăn'),
+              ),
+            ],
+          ),
         ),
       ),
     );

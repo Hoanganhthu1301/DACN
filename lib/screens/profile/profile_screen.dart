@@ -10,6 +10,7 @@ import 'edit_profile_screen.dart';
 import '../account/login_screen.dart';
 // Follow service (one-shot)
 import '../../services/follow_service.dart';
+import '../../services/fcm_token_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String userId;
@@ -46,12 +47,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _logout() async {
+    final me = FirebaseAuth.instance.currentUser;
+    if (me != null) {
+      try {
+        await FcmTokenService().unlinkAndDeleteToken();
+      } catch (_) {}
+    }
     await FirebaseAuth.instance.signOut();
-    if (!mounted) return; // dùng State.context
+    if (!mounted) return;
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('Đã đăng xuất')));
-    // Điều hướng về Login
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (context) => const LoginScreen()),
       (route) => false,

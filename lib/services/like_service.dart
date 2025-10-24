@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'notification_service.dart';
 
 class LikeService {
   final _db = FirebaseFirestore.instance;
@@ -31,15 +32,36 @@ class LikeService {
   Future<void> toggleLike(String foodId, bool currentlyLiked) async {
     final uid = _uid;
     if (uid == null) throw Exception('Bạn cần đăng nhập');
+
     final ref = _db
         .collection('food_likes')
         .doc(foodId)
         .collection('users')
         .doc(uid);
+
     if (currentlyLiked) {
       await ref.delete();
     } else {
       await ref.set({'createdAt': FieldValue.serverTimestamp()});
+
+      // Lấy tác giả bài viết, có fallback cho dữ liệu cũ
+      final foodDoc = await _db.collection('foods').doc(foodId).get();
+      final data = foodDoc.data();
+      final authorId =
+          (data?['authorId'] ??
+                  data?['authorID'] ??
+                  data?['uid'] ??
+                  data?['userId'] ??
+                  data?['ownerId'] ??
+                  '')
+              .toString();
+
+      if (authorId.isNotEmpty && authorId != uid) {
+        await NotificationService().addLikeNotification(
+          targetUid: authorId,
+          foodId: foodId,
+        );
+      }
     }
   }
 
