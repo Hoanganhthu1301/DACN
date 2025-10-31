@@ -128,6 +128,7 @@ class _AddFoodPageState extends State<AddFoodPage> {
       'image_url': imageUrl ?? '',
       'video_url': videoUrl ?? '',
       'authorId': user?.uid,
+      'authorEmail': user?.email ?? 'Ẩn danh',
       'created_at': FieldValue.serverTimestamp(),
     });
 

@@ -31,6 +31,7 @@ class _EditFoodPageState extends State<EditFoodPage> {
   List<Map<String, dynamic>> _diets = [];
 
   bool _isLoading = false;
+  bool _loadingUserInfo = true;
   bool hasPermission = false;
 
   File? _imageFile;
@@ -59,23 +60,29 @@ class _EditFoodPageState extends State<EditFoodPage> {
   }
 
   Future<void> _loadUserInfo() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+  final user = FirebaseAuth.instance.currentUser;
+  if (user == null) return;
 
-    final userDoc =
-        await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-    if (!userDoc.exists) return;
+  final userDoc =
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+  if (!userDoc.exists) return;
 
-    setState(() {
-      currentUserEmail = user.email;
-      currentUserRole = userDoc['role'];
-    });
+  final role = (userDoc['role'] ?? '').toString().toLowerCase();
+  final createdBy = (widget.data['authorId'] ?? '').toString();
 
-    final createdBy = widget.data['authorId'];
-    if (currentUserRole == 'admin' || createdBy == user.uid) {
-      setState(() => hasPermission = true);
-    }
+  debugPrint('🔍 Current user: ${user.uid}, Role: $role, CreatedBy: $createdBy');
+
+  if (createdBy == user.uid) {
+    setState(() => hasPermission = true);
   }
+
+  setState(() {
+    currentUserEmail = user.email;
+    currentUserRole = role;
+    _loadingUserInfo = false;
+  });
+}
+
 
   Future<void> _loadCategories() async {
     final snapshot = await FirebaseFirestore.instance.collection('categories').get();
@@ -186,143 +193,151 @@ class _EditFoodPageState extends State<EditFoodPage> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    if (!hasPermission) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Sửa món ăn')),
-        body: const Center(
-          child: Text(
-            '🚫 Bạn không có quyền chỉnh sửa món ăn này',
-            style: TextStyle(fontSize: 18, color: Colors.red),
-          ),
-        ),
-      );
-    }
-
+Widget build(BuildContext context) {
+  if (_loadingUserInfo) {
     return Scaffold(
       appBar: AppBar(title: const Text('Sửa món ăn')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(labelText: 'Tên món ăn'),
-                validator: (v) => v!.isEmpty ? 'Không được bỏ trống' : null,
-              ),
-              const SizedBox(height: 16),
+      body: const Center(child: CircularProgressIndicator()),
+    );
+  }
 
-              TextFormField(
-                controller: _caloriesController,
-                decoration: const InputDecoration(labelText: 'Lượng calo (kcal)'),
-                keyboardType: TextInputType.number,
-                validator: (v) => v!.isEmpty ? 'Không được bỏ trống' : null,
-              ),
-              const SizedBox(height: 16),
-
-              DropdownButtonFormField<String>(
-                initialValue: _selectedCategoryId,
-                decoration: const InputDecoration(labelText: 'Danh mục món ăn'),
-                items: _categories
-                    .map((cat) => DropdownMenuItem<String>(
-                          value: cat['id'],
-                          child: Text(cat['name']),
-                        ))
-                    .toList(),
-                onChanged: (val) => setState(() => _selectedCategoryId = val),
-              ),
-              const SizedBox(height: 16),
-
-              DropdownButtonFormField<String>(
-                initialValue: _selectedDietId,
-                decoration: const InputDecoration(labelText: 'Chế độ ăn'),
-                items: _diets
-                    .map((diet) => DropdownMenuItem<String>(
-                          value: diet['id'],
-                          child: Text(diet['name']),
-                        ))
-                    .toList(),
-                onChanged: (val) => setState(() => _selectedDietId = val),
-              ),
-              const SizedBox(height: 16),
-
-              TextFormField(
-                controller: _ingredientsController,
-                decoration: const InputDecoration(labelText: 'Nguyên liệu'),
-                maxLines: 3,
-                validator: (v) => v!.isEmpty ? 'Không được bỏ trống' : null,
-              ),
-              const SizedBox(height: 16),
-
-              TextFormField(
-                controller: _instructionsController,
-                decoration: const InputDecoration(labelText: 'Các bước thực hiện'),
-                maxLines: 5,
-                validator: (v) => v!.isEmpty ? 'Không được bỏ trống' : null,
-              ),
-              const SizedBox(height: 16),
-
-              if (_imageFile != null)
-                Image.file(_imageFile!, height: 200, fit: BoxFit.cover)
-              else if (widget.data['image_url'] != null &&
-                  widget.data['image_url'].isNotEmpty)
-                Image.network(widget.data['image_url'],
-                    height: 200, fit: BoxFit.cover),
-
-              const SizedBox(height: 8),
-
-              if (_videoFile != null &&
-                  _videoController != null &&
-                  _videoController!.value.isInitialized)
-                AspectRatio(
-                  aspectRatio: _videoController!.value.aspectRatio,
-                  child: VideoPlayer(_videoController!),
-                )
-              else if (widget.data['video_url'] != null &&
-                  widget.data['video_url'].isNotEmpty)
-                const Text('🎬 Video hiện tại có sẵn'),
-
-              const SizedBox(height: 16),
-
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _pickImage,
-                      icon: const Icon(Icons.image),
-                      label: const Text('Chọn ảnh'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _pickVideo,
-                      icon: const Icon(Icons.videocam),
-                      label: const Text('Chọn video'),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-
-              ElevatedButton.icon(
-                onPressed: _isLoading ? null : _updateFood,
-                icon: _isLoading
-                    ? const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(color: Colors.white),
-                      )
-                    : const Icon(Icons.save),
-                label: const Text('Cập nhật món ăn'),
-              ),
-            ],
-          ),
+  if (!hasPermission) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Sửa món ăn')),
+      body: const Center(
+        child: Text(
+          '🚫 Bạn không có quyền chỉnh sửa món ăn này',
+          style: TextStyle(fontSize: 18, color: Colors.red),
         ),
       ),
     );
   }
+
+  // ✅ Nếu qua được đây nghĩa là có quyền
+  return Scaffold(
+    appBar: AppBar(title: const Text('Sửa món ăn')),
+    body: SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextFormField(
+              controller: _nameController,
+              decoration: const InputDecoration(labelText: 'Tên món ăn'),
+              validator: (v) => v!.isEmpty ? 'Không được bỏ trống' : null,
+            ),
+            const SizedBox(height: 16),
+
+            TextFormField(
+              controller: _caloriesController,
+              decoration: const InputDecoration(labelText: 'Lượng calo (kcal)'),
+              keyboardType: TextInputType.number,
+              validator: (v) => v!.isEmpty ? 'Không được bỏ trống' : null,
+            ),
+            const SizedBox(height: 16),
+
+            DropdownButtonFormField<String>(
+              initialValue: _selectedCategoryId,
+              decoration: const InputDecoration(labelText: 'Danh mục món ăn'),
+              items: _categories
+                  .map((cat) => DropdownMenuItem<String>(
+                        value: cat['id'],
+                        child: Text(cat['name']),
+                      ))
+                  .toList(),
+              onChanged: (val) => setState(() => _selectedCategoryId = val),
+            ),
+            const SizedBox(height: 16),
+
+            DropdownButtonFormField<String>(
+              initialValue: _selectedDietId,
+              decoration: const InputDecoration(labelText: 'Chế độ ăn'),
+              items: _diets
+                  .map((diet) => DropdownMenuItem<String>(
+                        value: diet['id'],
+                        child: Text(diet['name']),
+                      ))
+                  .toList(),
+              onChanged: (val) => setState(() => _selectedDietId = val),
+            ),
+            const SizedBox(height: 16),
+
+            TextFormField(
+              controller: _ingredientsController,
+              decoration: const InputDecoration(labelText: 'Nguyên liệu'),
+              maxLines: 3,
+              validator: (v) => v!.isEmpty ? 'Không được bỏ trống' : null,
+            ),
+            const SizedBox(height: 16),
+
+            TextFormField(
+              controller: _instructionsController,
+              decoration: const InputDecoration(labelText: 'Các bước thực hiện'),
+              maxLines: 5,
+              validator: (v) => v!.isEmpty ? 'Không được bỏ trống' : null,
+            ),
+            const SizedBox(height: 16),
+
+            if (_imageFile != null)
+              Image.file(_imageFile!, height: 200, fit: BoxFit.cover)
+            else if (widget.data['image_url'] != null &&
+                widget.data['image_url'].isNotEmpty)
+              Image.network(widget.data['image_url'],
+                  height: 200, fit: BoxFit.cover),
+
+            const SizedBox(height: 8),
+
+            if (_videoFile != null &&
+                _videoController != null &&
+                _videoController!.value.isInitialized)
+              AspectRatio(
+                aspectRatio: _videoController!.value.aspectRatio,
+                child: VideoPlayer(_videoController!),
+              )
+            else if (widget.data['video_url'] != null &&
+                widget.data['video_url'].isNotEmpty)
+              const Text('🎬 Video hiện tại có sẵn'),
+
+            const SizedBox(height: 16),
+
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _pickImage,
+                    icon: const Icon(Icons.image),
+                    label: const Text('Chọn ảnh'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _pickVideo,
+                    icon: const Icon(Icons.videocam),
+                    label: const Text('Chọn video'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+
+            ElevatedButton.icon(
+              onPressed: _isLoading ? null : _updateFood,
+              icon: _isLoading
+                  ? const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(color: Colors.white),
+                    )
+                  : const Icon(Icons.save),
+              label: const Text('Cập nhật món ăn'),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
 }

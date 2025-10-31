@@ -12,6 +12,9 @@ import '../account/login_screen.dart';
 import '../../services/follow_service.dart';
 import '../../services/fcm_token_service.dart';
 
+// ✅ import thêm trang chỉnh sửa món ăn
+import '../food/edit_food_page.dart';
+
 class ProfileScreen extends StatefulWidget {
   final String userId;
 
@@ -25,18 +28,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String? get currentUserId => FirebaseAuth.instance.currentUser?.uid;
   final _followSvc = FollowService();
 
-  // State cho counters và following (đọc một lần)
   bool _loadingStats = true;
   bool _isFollowing = false;
   int _followersCount = 0;
   int _followingCount = 0;
   int _postsCount = 0;
 
-  // State cho bài viết (đọc một lần)
   bool _loadingPosts = true;
   List<QueryDocumentSnapshot> _posts = [];
 
-  // State cho user doc (đọc một lần)
   bool _loadingUser = true;
   Map<String, dynamic>? _userData;
 
@@ -88,7 +88,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final followersCount = await _followSvc.followersCountOnce(widget.userId);
       final followingCount = await _followSvc.followingCountOnce(widget.userId);
 
-      // Posts count (Aggregation nếu có; nếu không, fallback = _posts.length)
       int postsCount = _posts.isNotEmpty ? _posts.length : 0;
       try {
         final agg = await FirebaseFirestore.instance
@@ -130,6 +129,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  // ✅ Thêm hàm xóa món ăn
+  Future<void> _deleteFood(String foodId) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Xóa món ăn'),
+        content: const Text('Bạn có chắc chắn muốn xóa món ăn này không?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Hủy')),
+          ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Xóa')),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      await FirebaseFirestore.instance.collection('foods').doc(foodId).delete();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('✅ Đã xóa món ăn')),
+      );
+      await _loadPosts();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Lỗi khi xóa: $e')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool isCurrentUser = currentUserId == widget.userId;
@@ -149,7 +183,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       builder: (_) => EditProfileScreen(userId: widget.userId),
                     ),
                   );
-                  // Sau await, guard bằng context.mounted vì dùng context của tham số build
                   if (!context.mounted) return;
                   await _loadUser();
                 } else if (value == 'logout') {
@@ -227,42 +260,79 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 itemBuilder: (context, index) {
                   final postData = _posts[index].data() as Map<String, dynamic>;
                   final imageUrl = (postData['image_url'] ?? '') as String;
+                  final foodId = _posts[index].id;
+                  final isOwner = currentUserId == postData['authorId'];
 
-                  return GestureDetector(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              FoodDetailScreen(foodId: _posts[index].id),
-                        ),
-                      );
-                    },
-                    child: imageUrl.isNotEmpty
-                        ? Image.network(
-                            imageUrl,
-                            fit: BoxFit.cover,
-                            loadingBuilder: (context, child, loadingProgress) {
-                              if (loadingProgress == null) return child;
-                              return Container(color: Colors.grey.shade200);
-                            },
-                            errorBuilder: (context, error, stackTrace) {
-                              return Container(
+                  return Stack(
+                    children: [
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => FoodDetailScreen(foodId: foodId),
+                            ),
+                          );
+                        },
+                        child: imageUrl.isNotEmpty
+                            ? Image.network(
+                                imageUrl,
+                                fit: BoxFit.cover,
+                                loadingBuilder:
+                                    (context, child, loadingProgress) {
+                                  if (loadingProgress == null) return child;
+                                  return Container(color: Colors.grey.shade200);
+                                },
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Container(
+                                    color: Colors.grey.shade200,
+                                    child: const Icon(
+                                      Icons.broken_image,
+                                      color: Colors.grey,
+                                    ),
+                                  );
+                                },
+                              )
+                            : Container(
                                 color: Colors.grey.shade200,
                                 child: const Icon(
-                                  Icons.broken_image,
+                                  Icons.fastfood,
                                   color: Colors.grey,
                                 ),
-                              );
+                              ),
+                      ),
+
+                      // ✅ Nút sửa / xóa chỉ hiện khi là chủ món ăn
+                      if (isOwner)
+                        Positioned(
+                          top: 4,
+                          right: 4,
+                          child: PopupMenuButton<String>(
+                            onSelected: (value) async {
+                              if (value == 'edit') {
+                                await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => EditFoodPage(
+                                      foodId: foodId,
+                                      data: postData,
+                                    ),
+                                  ),
+                                );
+                                await _loadPosts();
+                              } else if (value == 'delete') {
+                                _deleteFood(foodId);
+                              }
                             },
-                          )
-                        : Container(
-                            color: Colors.grey.shade200,
-                            child: const Icon(
-                              Icons.fastfood,
-                              color: Colors.grey,
-                            ),
+                            itemBuilder: (context) => const [
+                              PopupMenuItem(
+                                  value: 'edit', child: Text('✏️ Sửa')),
+                              PopupMenuItem(
+                                  value: 'delete', child: Text('🗑️ Xóa')),
+                            ],
                           ),
+                        ),
+                    ],
                   );
                 },
               ),
@@ -319,8 +389,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 16),
-
-          // Thống kê (đọc một lần)
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
@@ -335,10 +403,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   : _Stat(label: 'Following', number: _followingCount),
             ],
           ),
-
           const SizedBox(height: 20),
-
-          // Nút theo dõi / đang theo dõi (chỉ khi xem người khác)
           if (!isCurrentUser)
             ElevatedButton.icon(
               icon: Icon(_isFollowing ? Icons.check : Icons.person_add),
@@ -354,18 +419,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         }
                         await _loadStats();
                       } catch (e) {
-                        // Sau await, dùng context của tham số -> guard bằng context.mounted
                         if (!context.mounted) return;
-                        ScaffoldMessenger.of(
-                          context,
-                        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Lỗi: $e')));
                       }
                     },
               style: ElevatedButton.styleFrom(
-                backgroundColor: _isFollowing
-                    ? Colors.grey.shade300
-                    : Colors.orange,
-                foregroundColor: _isFollowing ? Colors.black87 : Colors.white,
+                backgroundColor:
+                    _isFollowing ? Colors.grey.shade300 : Colors.orange,
+                foregroundColor:
+                    _isFollowing ? Colors.black87 : Colors.white,
               ),
             ),
         ],

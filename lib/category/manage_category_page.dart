@@ -58,7 +58,6 @@ class _ManageCategoryPageState extends State<ManageCategoryPage> {
     }
   }
 
-
   Future<void> _addOrEditCategory({String? id, String? name, String? type}) async {
     TextEditingController nameController = TextEditingController(text: name ?? '');
     String selectedType = type ?? 'theo_loai_mon_an';
@@ -87,14 +86,14 @@ class _ManageCategoryPageState extends State<ManageCategoryPage> {
           ],
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Hủy'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Hủy')),
           ElevatedButton(
             onPressed: () async {
+              final name = nameController.text.trim();
+              if (name.isEmpty) return;
+
               final data = {
-                'name': nameController.text.trim(),
+                'name': name,
                 'type': selectedType,
                 'createdAt': FieldValue.serverTimestamp(),
               };
@@ -119,19 +118,76 @@ class _ManageCategoryPageState extends State<ManageCategoryPage> {
     await _firestore.collection('categories').doc(id).delete();
   }
 
+  Widget _buildCategoryList(String type, String title) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: _firestore
+          .collection('categories')
+          .where('type', isEqualTo: type)
+          .orderBy('createdAt', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final docs = snapshot.data!.docs;
+
+        if (docs.isEmpty) {
+          return Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text('Chưa có danh mục $title nào.'),
+          );
+        }
+
+        return ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: docs.length,
+          itemBuilder: (context, index) {
+            final data = docs[index];
+            return Card(
+              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              child: ListTile(
+                leading: const Icon(Icons.category, color: Colors.green),
+                title: Text(data['name']),
+                subtitle: Text(
+                  type == 'theo_loai_mon_an'
+                      ? 'Phân loại món ăn'
+                      : 'Phân loại theo chế độ ăn',
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.edit, color: Colors.orange),
+                      onPressed: () => _addOrEditCategory(
+                        id: data.id,
+                        name: data['name'],
+                        type: data['type'],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete, color: Colors.red),
+                      onPressed: () => _deleteCategory(data.id),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     if (!_isAdmin) {
       return const Scaffold(
-        body: Center(
-          child: Text('Bạn không có quyền truy cập trang này.'),
-        ),
+        body: Center(child: Text('Bạn không có quyền truy cập trang này.')),
       );
     }
 
@@ -140,51 +196,31 @@ class _ManageCategoryPageState extends State<ManageCategoryPage> {
         title: const Text('Quản lý danh mục'),
         backgroundColor: Colors.green,
       ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: _firestore
-            .collection('categories')
-            .orderBy('createdAt', descending: true)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-          final docs = snapshot.data!.docs;
+      body: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(12.0),
+              child: Text(
+                '🍱 Danh mục theo loại món ăn',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ),
+            _buildCategoryList('theo_loai_mon_an', 'loại món ăn'),
 
-          return ListView.builder(
-            itemCount: docs.length,
-            itemBuilder: (context, index) {
-              final data = docs[index];
-              return Card(
-                margin: const EdgeInsets.all(8),
-                child: ListTile(
-                  leading: const Icon(Icons.category, color: Colors.green),
-                  title: Text(data['name']),
-                  subtitle: Text(
-                    data['type'] == 'theo_loai_mon_an'
-                        ? 'Phân loại món ăn'
-                        : 'Phân loại theo chế độ ăn',
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.edit, color: Colors.orange),
-                        onPressed: () => _addOrEditCategory(
-                          id: data.id,
-                          name: data['name'],
-                          type: data['type'],
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.red),
-                        onPressed: () => _deleteCategory(data.id),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          );
-        },
+            const Padding(
+              padding: EdgeInsets.all(12.0),
+              child: Text(
+                '🥗 Danh mục theo chế độ ăn',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ),
+            _buildCategoryList('theo_che_do_an', 'chế độ ăn'),
+
+            const SizedBox(height: 80),
+          ],
+        ),
       ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: Colors.green,

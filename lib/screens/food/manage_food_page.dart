@@ -102,25 +102,37 @@ class _ManageFoodPageState extends State<ManageFoodPage> {
                       fontSize: 16,
                     ),
                   ),
-                  subtitle: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Người đăng: ${data['authorEmail'] ?? 'Ẩn danh'}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 14),
-                        ),
-                      ),
-                      if (data['locked'] == true)
-                        const Padding(
-                          padding: EdgeInsets.only(left: 4.0),
-                          child: Icon(Icons.lock, size: 16, color: Colors.red),
-                        ),
-                    ],
+                  subtitle: FutureBuilder<DocumentSnapshot>(
+                    future: _firestore.collection('users').doc(data['authorId']).get(),
+                    builder: (context, snapshot) {
+                      String authorEmail = 'Ẩn danh';
+                      if (snapshot.hasData && snapshot.data!.exists) {
+                        final userData = snapshot.data!.data() as Map<String, dynamic>;
+                        authorEmail = userData['email'] ?? 'Ẩn danh';
+                      }
+
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Người đăng: $authorEmail',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 14),
+                            ),
+                          ),
+                          if (data['locked'] == true)
+                            const Padding(
+                              padding: EdgeInsets.only(left: 4.0),
+                              child: Icon(Icons.lock, size: 16, color: Colors.red),
+                            ),
+                        ],
+                      );
+                    },
                   ),
-                  trailing: PopupMenuButton<String>(
+
+                                    trailing: PopupMenuButton<String>(
                     onSelected: (value) {
                       if (value == 'edit') {
                         Navigator.push(

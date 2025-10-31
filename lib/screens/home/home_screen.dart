@@ -109,15 +109,23 @@ class _HomeScreenState extends State<HomeScreen> {
       final data = food.data() as Map<String, dynamic>? ?? {};
 
       final foodName = (data['name'] ?? '').toString().toLowerCase().trim();
-      final foodCategoryName = (data['categoryName'] ?? '').toString().toLowerCase().trim();
-      final foodDiet = (data['diet'] ?? '').toString().toLowerCase().trim();
+      final foodCategoryName =
+          (data['categoryName'] ?? '').toString().toLowerCase().trim();
+      final foodDietName =
+          (data['dietName'] ?? '').toString().toLowerCase().trim();
 
-      final matchesSearch =
-          searchQuery.isEmpty || foodName.contains(searchQuery.toLowerCase().trim());
-      final matchesCategory =
-          selectedCategory.isEmpty || selectedCategory.toLowerCase().trim() == foodCategoryName;
-      final matchesDiet =
-          selectedDiet.isEmpty || selectedDiet.toLowerCase().trim() == foodDiet;
+      debugPrint(
+          'Filtering food: ${data['name']} - Category: $foodCategoryName - Diet: $foodDietName');
+      debugPrint('Selected: Category=$selectedCategory, Diet=$selectedDiet');
+
+      final matchesSearch = searchQuery.isEmpty ||
+          foodName.contains(searchQuery.toLowerCase().trim());
+
+      final matchesCategory = selectedCategory.isEmpty ||
+          foodCategoryName == selectedCategory.toLowerCase().trim();
+
+      final matchesDiet = selectedDiet.isEmpty ||
+          foodDietName == selectedDiet.toLowerCase().trim();
 
       return matchesSearch && matchesCategory && matchesDiet;
     }).toList();
@@ -127,11 +135,13 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_totalPages == 0) _currentPage = 1;
 
     final startIndex = (_currentPage - 1) * _pageSize;
-    final endIndex =
-        (_currentPage * _pageSize < filtered.length) ? _currentPage * _pageSize : filtered.length;
+    final endIndex = (_currentPage * _pageSize < filtered.length)
+        ? _currentPage * _pageSize
+        : filtered.length;
 
     _displayFoods = filtered.sublist(startIndex, endIndex);
   }
+
 
   void _changePage(int page) {
     if (page < 1 || page > _totalPages) return;
