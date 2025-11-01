@@ -10,6 +10,7 @@ import '../account/user_management_screen.dart';
 import '../food/add_food_page.dart';
 import '../food/food_detail_screen.dart';
 import '../food/saved_foods_page.dart';
+import 'package:doan/screens/menu/daily_menu_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -76,13 +77,13 @@ class _HomeScreenState extends State<HomeScreen> {
         .orderBy('created_at', descending: true)
         .snapshots()
         .listen((snapshot) {
-      if (!mounted) return;
-      setState(() {
-        _allFoods = snapshot.docs;
-        _updatePageData();
-        _isLoading = false;
-      });
-    });
+          if (!mounted) return;
+          setState(() {
+            _allFoods = snapshot.docs;
+            _updatePageData();
+            _isLoading = false;
+          });
+        });
   }
 
   Future<void> _fetchDietCategories() async {
@@ -109,29 +110,38 @@ class _HomeScreenState extends State<HomeScreen> {
       final data = food.data() as Map<String, dynamic>? ?? {};
 
       final foodName = (data['name'] ?? '').toString().toLowerCase().trim();
-      final foodCategoryName =
-          (data['categoryName'] ?? '').toString().toLowerCase().trim();
-      final foodDietName =
-          (data['dietName'] ?? '').toString().toLowerCase().trim();
+      final foodCategoryName = (data['categoryName'] ?? '')
+          .toString()
+          .toLowerCase()
+          .trim();
+      final foodDietName = (data['dietName'] ?? '')
+          .toString()
+          .toLowerCase()
+          .trim();
 
       debugPrint(
-          'Filtering food: ${data['name']} - Category: $foodCategoryName - Diet: $foodDietName');
+        'Filtering food: ${data['name']} - Category: $foodCategoryName - Diet: $foodDietName',
+      );
       debugPrint('Selected: Category=$selectedCategory, Diet=$selectedDiet');
 
-      final matchesSearch = searchQuery.isEmpty ||
+      final matchesSearch =
+          searchQuery.isEmpty ||
           foodName.contains(searchQuery.toLowerCase().trim());
 
-      final matchesCategory = selectedCategory.isEmpty ||
+      final matchesCategory =
+          selectedCategory.isEmpty ||
           foodCategoryName == selectedCategory.toLowerCase().trim();
 
-      final matchesDiet = selectedDiet.isEmpty ||
+      final matchesDiet =
+          selectedDiet.isEmpty ||
           foodDietName == selectedDiet.toLowerCase().trim();
 
       return matchesSearch && matchesCategory && matchesDiet;
     }).toList();
 
     _totalPages = (filtered.length / _pageSize).ceil();
-    if (_currentPage > _totalPages && _totalPages > 0) _currentPage = _totalPages;
+    if (_currentPage > _totalPages && _totalPages > 0)
+      _currentPage = _totalPages;
     if (_totalPages == 0) _currentPage = 1;
 
     final startIndex = (_currentPage - 1) * _pageSize;
@@ -141,7 +151,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
     _displayFoods = filtered.sublist(startIndex, endIndex);
   }
-
 
   void _changePage(int page) {
     if (page < 1 || page > _totalPages) return;
@@ -207,14 +216,13 @@ class _HomeScreenState extends State<HomeScreen> {
                           hint: const Text('Chọn chế độ ăn'),
                           isExpanded: true,
                           items: [
-                            DropdownMenuItem(
-                              value: '',
-                              child: Text('Tất cả'),
+                            DropdownMenuItem(value: '', child: Text('Tất cả')),
+                            ..._dietCategories.map(
+                              (diet) => DropdownMenuItem(
+                                value: diet,
+                                child: Text(diet),
+                              ),
                             ),
-                            ..._dietCategories.map((diet) => DropdownMenuItem(
-                                  value: diet,
-                                  child: Text(diet),
-                                )),
                           ],
                           onChanged: (value) {
                             setState(() {
@@ -230,12 +238,36 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: ListView(
                       scrollDirection: Axis.horizontal,
                       children: [
-                        _buildFoodCategory('Món khai vị', Icons.emoji_food_beverage, Colors.green),
-                        _buildFoodCategory('Món chính', Icons.restaurant, Colors.red),
-                        _buildFoodCategory('Món phụ', Icons.rice_bowl, Colors.orange),
-                        _buildFoodCategory('Ăn vặt', Icons.fastfood, Colors.purple),
-                        _buildFoodCategory('Tráng miệng', Icons.icecream, Colors.pink),
-                        _buildFoodCategory('Nước', Icons.local_drink, Colors.blue),
+                        _buildFoodCategory(
+                          'Món khai vị',
+                          Icons.emoji_food_beverage,
+                          Colors.green,
+                        ),
+                        _buildFoodCategory(
+                          'Món chính',
+                          Icons.restaurant,
+                          Colors.red,
+                        ),
+                        _buildFoodCategory(
+                          'Món phụ',
+                          Icons.rice_bowl,
+                          Colors.orange,
+                        ),
+                        _buildFoodCategory(
+                          'Ăn vặt',
+                          Icons.fastfood,
+                          Colors.purple,
+                        ),
+                        _buildFoodCategory(
+                          'Tráng miệng',
+                          Icons.icecream,
+                          Colors.pink,
+                        ),
+                        _buildFoodCategory(
+                          'Nước',
+                          Icons.local_drink,
+                          Colors.blue,
+                        ),
                       ],
                     ),
                   ),
@@ -246,12 +278,28 @@ class _HomeScreenState extends State<HomeScreen> {
                       scrollDirection: Axis.horizontal,
                       children: [
                         _buildFeatureCard(
+                          'Gợi ý Thực đơn', // Tiêu đề
+                          Icons.auto_awesome, // Icon
+                          Colors.teal, // Màu
+                          () {
+                            // Hành động
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const DailyMenuScreen(),
+                              ),
+                            );
+                          },
+                        ),
+                        _buildFeatureCard(
                           'Đã lưu',
                           Icons.bookmark,
                           Colors.blueGrey,
                           () => Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (_) => const SavedFoodsPage()),
+                            MaterialPageRoute(
+                              builder: (_) => const SavedFoodsPage(),
+                            ),
                           ),
                         ),
                         _buildFeatureCard(
@@ -260,7 +308,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           Colors.green,
                           () {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Chức năng đang cập nhật...')),
+                              const SnackBar(
+                                content: Text('Chức năng đang cập nhật...'),
+                              ),
                             );
                           },
                         ),
@@ -270,7 +320,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           Colors.orange,
                           () => Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (_) => const AddFoodPage()),
+                            MaterialPageRoute(
+                              builder: (_) => const AddFoodPage(),
+                            ),
                           ),
                         ),
                       ],
@@ -308,7 +360,9 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           IconButton(
             icon: const Icon(Icons.chevron_left),
-            onPressed: _currentPage > 1 ? () => _changePage(_currentPage - 1) : null,
+            onPressed: _currentPage > 1
+                ? () => _changePage(_currentPage - 1)
+                : null,
           ),
           ...List.generate(_totalPages, (i) {
             final page = i + 1;
@@ -333,7 +387,9 @@ class _HomeScreenState extends State<HomeScreen> {
           }),
           IconButton(
             icon: const Icon(Icons.chevron_right),
-            onPressed: _currentPage < _totalPages ? () => _changePage(_currentPage + 1) : null,
+            onPressed: _currentPage < _totalPages
+                ? () => _changePage(_currentPage + 1)
+                : null,
           ),
         ],
       ),
@@ -357,7 +413,9 @@ class _HomeScreenState extends State<HomeScreen> {
               )
             : const Icon(Icons.fastfood, size: 40),
         title: Text(data['name'] ?? ''),
-        subtitle: Text('Calo: ${data['calories'] ?? 0} kcal | Chế độ: ${data['diet'] ?? ''}'),
+        subtitle: Text(
+          'Calo: ${data['calories'] ?? 0} kcal | Chế độ: ${data['diet'] ?? ''}',
+        ),
         onTap: () => Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => FoodDetailScreen(foodId: food.id)),
@@ -372,7 +430,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 final liked = s.data ?? false;
                 return IconButton(
                   tooltip: liked ? 'Bỏ thích' : 'Thích',
-                  onPressed: uid == null ? null : () => _likeSvc.toggleLike(food.id, liked),
+                  onPressed: uid == null
+                      ? null
+                      : () => _likeSvc.toggleLike(food.id, liked),
                   icon: Icon(
                     liked ? Icons.favorite : Icons.favorite_border,
                     color: liked ? Colors.pink : Colors.grey,
@@ -395,7 +455,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 final saved = s.data ?? false;
                 return IconButton(
                   tooltip: saved ? 'Bỏ lưu' : 'Lưu',
-                  onPressed: uid == null ? null : () => _likeSvc.toggleSave(food.id, saved),
+                  onPressed: uid == null
+                      ? null
+                      : () => _likeSvc.toggleSave(food.id, saved),
                   icon: Icon(saved ? Icons.bookmark : Icons.bookmark_border),
                 );
               },
@@ -406,7 +468,12 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildFeatureCard(String title, IconData icon, Color color, VoidCallback onTap) {
+  Widget _buildFeatureCard(
+    String title,
+    IconData icon,
+    Color color,
+    VoidCallback onTap,
+  ) {
     return GestureDetector(
       onTap: onTap,
       child: Card(
