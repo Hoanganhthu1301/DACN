@@ -5,6 +5,8 @@ import 'package:video_player/video_player.dart';
 import 'package:provider/provider.dart';
 import '../../services/like_service.dart';
 import '../profile/profile_screen.dart';
+import '../../widgets/download_recipe_button.dart';
+import '../../widgets/comment_section.dart';
 
 class FoodDetailScreen extends StatefulWidget {
   final String foodId;
@@ -73,7 +75,10 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Chi tiết món ăn")),
+      appBar: AppBar(
+        title: const Text("Chi tiết món ăn"),
+        actions: [DownloadRecipeButton(foodId: widget.foodId)],
+      ),
       body: FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
         future: FirebaseFirestore.instance
             .collection('foods')
@@ -96,14 +101,14 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
                 .doc(categoryId)
                 .get()
                 .then((catSnap) {
-              if (catSnap.exists) {
-                setState(() {
-                  categoryType = catSnap.data()?['name'] ?? '';
+                  if (catSnap.exists) {
+                    setState(() {
+                      categoryType = catSnap.data()?['name'] ?? '';
+                    });
+                  }
                 });
-              }
-            });
-}
-// loại hình món ăn
+          }
+          // loại hình món ăn
           final videoUrl = data['video_url'] ?? '';
           final ingredients = data['ingredients'] ?? '';
 
@@ -118,10 +123,8 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
           }
 
           // --- Người đăng ---
-          final authorId = data['authorId'] ??
-              data['uid'] ??
-              data['userId'] ??
-              '';
+          final authorId =
+              data['authorId'] ?? data['uid'] ?? data['userId'] ?? '';
           final authorNameFb = data['authorName'] ?? 'Người dùng';
           final authorPhotoURLFb = data['authorPhotoURL'] ?? '';
 
@@ -136,10 +139,15 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                CommentSection(foodId: widget.foodId),
                 // Ảnh món ăn
                 imageUrl.isNotEmpty
-                    ? Image.network(imageUrl,
-                        width: double.infinity, height: 240, fit: BoxFit.cover)
+                    ? Image.network(
+                        imageUrl,
+                        width: double.infinity,
+                        height: 240,
+                        fit: BoxFit.cover,
+                      )
                     : Container(
                         width: double.infinity,
                         height: 200,
@@ -160,7 +168,9 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
                             child: Text(
                               name,
                               style: const TextStyle(
-                                  fontSize: 24, fontWeight: FontWeight.bold),
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                           // ❤️ Yêu thích
@@ -174,9 +184,9 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
                                 onPressed: uid == null
                                     ? null
                                     : () => _likeSvc.toggleLike(
-                                          widget.foodId,
-                                          liked,
-                                        ),
+                                        widget.foodId,
+                                        liked,
+                                      ),
                                 icon: Icon(
                                   liked
                                       ? Icons.favorite
@@ -197,9 +207,9 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
                                 onPressed: uid == null
                                     ? null
                                     : () => _likeSvc.toggleSave(
-                                          widget.foodId,
-                                          saved,
-                                        ),
+                                        widget.foodId,
+                                        saved,
+                                      ),
                                 icon: Icon(
                                   saved
                                       ? Icons.bookmark
@@ -214,7 +224,8 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
                       const SizedBox(height: 4),
                       Text("Calo: $calories kcal"),
                       if (diet.isNotEmpty) Text("Chế độ ăn: $diet"),
-                      if (categoryType.isNotEmpty) Text("Loại món ăn: $categoryType"),
+                      if (categoryType.isNotEmpty)
+                        Text("Loại món ăn: $categoryType"),
                       const SizedBox(height: 16),
 
                       // Người đăng
@@ -229,9 +240,13 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
                       const SizedBox(height: 12),
 
                       // Nguyên liệu
-                      const Text("Nguyên liệu:",
-                          style: TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.bold)),
+                      const Text(
+                        "Nguyên liệu:",
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                       Text(
                         ingredients,
                         style: const TextStyle(fontSize: 16, height: 1.5),
@@ -239,9 +254,13 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
                       const SizedBox(height: 16),
 
                       // Hướng dẫn nấu
-                      const Text("Hướng dẫn nấu:",
-                          style: TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.bold)),
+                      const Text(
+                        "Hướng dẫn nấu:",
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                       Text(
                         instructions.isNotEmpty
                             ? instructions
@@ -261,34 +280,45 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
                     child: Column(
                       children: [
                         AspectRatio(
-                            aspectRatio: _videoController!.value.aspectRatio,
-                            child: VideoPlayer(_videoController!)),
-                        VideoProgressIndicator(_videoController!,
-                            allowScrubbing: true),
+                          aspectRatio: _videoController!.value.aspectRatio,
+                          child: VideoPlayer(_videoController!),
+                        ),
+                        VideoProgressIndicator(
+                          _videoController!,
+                          allowScrubbing: true,
+                        ),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             IconButton(
-                                icon: const Icon(Icons.replay_10),
-                                onPressed: () =>
-                                    _seekBy(const Duration(seconds: -10))),
+                              icon: const Icon(Icons.replay_10),
+                              onPressed: () =>
+                                  _seekBy(const Duration(seconds: -10)),
+                            ),
                             IconButton(
-                                icon: Icon(_videoController!.value.isPlaying
+                              icon: Icon(
+                                _videoController!.value.isPlaying
                                     ? Icons.pause
-                                    : Icons.play_arrow),
-                                onPressed: _togglePlayPause),
+                                    : Icons.play_arrow,
+                              ),
+                              onPressed: _togglePlayPause,
+                            ),
                             IconButton(
-                                icon: const Icon(Icons.forward_10),
-                                onPressed: () =>
-                                    _seekBy(const Duration(seconds: 10))),
+                              icon: const Icon(Icons.forward_10),
+                              onPressed: () =>
+                                  _seekBy(const Duration(seconds: 10)),
+                            ),
                             IconButton(
-                                icon: const Icon(Icons.fast_forward),
-                                onPressed: () => _changeSpeed(0.25)),
+                              icon: const Icon(Icons.fast_forward),
+                              onPressed: () => _changeSpeed(0.25),
+                            ),
                             IconButton(
-                                icon: const Icon(Icons.fast_rewind),
-                                onPressed: () => _changeSpeed(-0.25)),
+                              icon: const Icon(Icons.fast_rewind),
+                              onPressed: () => _changeSpeed(-0.25),
+                            ),
                             Text(
-                                '${_videoController!.value.playbackSpeed.toStringAsFixed(2)}x')
+                              '${_videoController!.value.playbackSpeed.toStringAsFixed(2)}x',
+                            ),
                           ],
                         ),
                         const SizedBox(height: 16),
@@ -333,8 +363,10 @@ class _AuthorSection extends StatelessWidget {
             children: [
               Text(
                 fallbackName,
-                style:
-                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               const Text(
                 'Người đăng',
@@ -346,8 +378,10 @@ class _AuthorSection extends StatelessWidget {
       );
     }
 
-    final userDocStream =
-        FirebaseFirestore.instance.collection('users').doc(authorId).snapshots();
+    final userDocStream = FirebaseFirestore.instance
+        .collection('users')
+        .doc(authorId)
+        .snapshots();
 
     return InkWell(
       onTap: () {
@@ -363,10 +397,10 @@ class _AuthorSection extends StatelessWidget {
           final displayName = (data?['displayName'] ?? '').toString().trim();
           final photoURL = (data?['photoURL'] ?? '').toString().trim();
 
-          final nameToShow =
-              displayName.isNotEmpty ? displayName : fallbackName;
-          final photoToShow =
-              photoURL.isNotEmpty ? photoURL : fallbackPhotoURL;
+          final nameToShow = displayName.isNotEmpty
+              ? displayName
+              : fallbackName;
+          final photoToShow = photoURL.isNotEmpty ? photoURL : fallbackPhotoURL;
 
           return Row(
             children: [
@@ -384,7 +418,9 @@ class _AuthorSection extends StatelessWidget {
                   Text(
                     nameToShow,
                     style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.w600),
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   const Text(
                     'Người đăng',
