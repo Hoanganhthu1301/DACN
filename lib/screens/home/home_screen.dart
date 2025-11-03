@@ -6,13 +6,13 @@ import '../../services/like_service.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/notifications_button.dart';
 import '../../core/push/push_service_min.dart';
-import '../account/user_management_screen.dart';
 import '../food/add_food_page.dart';
 import '../food/food_detail_screen.dart';
 import '../food/saved_foods_page.dart';
-import '../chat/ai_chat.dart';
 import '../chat/all_message.dart';
 import '../food/filtered_foods_screen.dart';
+import 'package:doan/screens/menu/daily_menu_screen.dart';
+
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -79,13 +79,13 @@ class _HomeScreenState extends State<HomeScreen> {
         .orderBy('created_at', descending: true)
         .snapshots()
         .listen((snapshot) {
-      if (!mounted) return;
-      setState(() {
-        _allFoods = snapshot.docs;
-        _updatePageData();
-        _isLoading = false;
-      });
-    });
+          if (!mounted) return;
+          setState(() {
+            _allFoods = snapshot.docs;
+            _updatePageData();
+            _isLoading = false;
+          });
+        });
   }
 Stream<int> unreadMessagesCount() {
   final currentUser = FirebaseAuth.instance.currentUser!;
@@ -128,30 +128,44 @@ Stream<int> unreadMessagesCount() {
       final data = food.data() as Map<String, dynamic>? ?? {};
 
       final foodName = (data['name'] ?? '').toString().toLowerCase().trim();
-      final foodCategoryName =
-          (data['categoryName'] ?? '').toString().toLowerCase().trim();
-      final foodDietName =
-          (data['dietName'] ?? '').toString().toLowerCase().trim();
+      final foodCategoryName = (data['categoryName'] ?? '')
+          .toString()
+          .toLowerCase()
+          .trim();
+      final foodDietName = (data['dietName'] ?? '')
+          .toString()
+          .toLowerCase()
+          .trim();
 
       debugPrint(
-          'Filtering food: ${data['name']} - Category: $foodCategoryName - Diet: $foodDietName');
+        'Filtering food: ${data['name']} - Category: $foodCategoryName - Diet: $foodDietName',
+      );
       debugPrint('Selected: Category=$selectedCategory, Diet=$selectedDiet');
 
-      final matchesSearch = searchQuery.isEmpty ||
+      final matchesSearch =
+          searchQuery.isEmpty ||
           foodName.contains(searchQuery.toLowerCase().trim());
 
-      final matchesCategory = selectedCategory.isEmpty ||
+      final matchesCategory =
+          selectedCategory.isEmpty ||
           foodCategoryName == selectedCategory.toLowerCase().trim();
 
-      final matchesDiet = selectedDiet.isEmpty ||
+      final matchesDiet =
+          selectedDiet.isEmpty ||
           foodDietName == selectedDiet.toLowerCase().trim();
 
       return matchesSearch && matchesCategory && matchesDiet;
     }).toList();
 
     _totalPages = (filtered.length / _pageSize).ceil();
-    if (_currentPage > _totalPages && _totalPages > 0) _currentPage = _totalPages;
-    if (_totalPages == 0) _currentPage = 1;
+
+    if (_currentPage > _totalPages && _totalPages > 0) {
+      _currentPage = _totalPages;
+    }
+
+    if (_totalPages == 0) {
+      _currentPage = 1;
+    }
 
     final startIndex = (_currentPage - 1) * _pageSize;
     final endIndex = (_currentPage * _pageSize < filtered.length)
@@ -160,7 +174,6 @@ Stream<int> unreadMessagesCount() {
 
     _displayFoods = filtered.sublist(startIndex, endIndex);
   }
-
 
   void _changePage(int page) {
     if (page < 1 || page > _totalPages) return;
@@ -172,71 +185,59 @@ Stream<int> unreadMessagesCount() {
 
   @override
   Widget build(BuildContext context) {
-    final Widget? leadingWidget = _isAdmin
-        ? IconButton(
-            icon: const Icon(Icons.group, color: Colors.white),
-            tooltip: 'Quản lý người dùng',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const UserManagementScreen()),
-              );
-            },
-          )
-        : null;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Trang chủ'),
         backgroundColor: Colors.green,
         centerTitle: true,
-        leading: leadingWidget,
         // Thay thế phần StreamBuilder hiện tại trong AppBar actions:
-actions: [
-    // Thêm StreamBuilder badge tin nhắn
-StreamBuilder<int>(
-  stream: unreadMessagesCount(),
-  builder: (context, snapshot) {
-    final unread = snapshot.data ?? 0;
-    return Stack(
-      children: [
-        IconButton(
-          icon: const Icon(Icons.message),
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const AllMessagesScreen()),
+        actions: [
+        if (!_isAdmin)
+            // Thêm StreamBuilder badge tin nhắn
+        StreamBuilder<int>(
+          stream: unreadMessagesCount(),
+          builder: (context, snapshot) {
+            final unread = snapshot.data ?? 0;
+            return Stack(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.message),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const AllMessagesScreen()),
+                    );
+                  },
+                ),
+                if (unread > 0)
+                  Positioned(
+                    right: 6,
+                    top: 6,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+                      child: Text(
+                        '$unread',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+              ],
             );
           },
         ),
-        if (unread > 0)
-          Positioned(
-            right: 6,
-            top: 6,
-            child: Container(
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                color: Colors.red,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
-              child: Text(
-                '$unread',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ),
-          ),
-      ],
-    );
-  },
-),
-    const NotificationsButton(),
-  ],
+            const NotificationsButton(),
+          ],
 ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -271,14 +272,13 @@ StreamBuilder<int>(
                           hint: const Text('Chọn chế độ ăn'),
                           isExpanded: true,
                           items: [
-                            DropdownMenuItem(
-                              value: '',
-                              child: Text('Tất cả'),
+                            DropdownMenuItem(value: '', child: Text('Tất cả')),
+                            ..._dietCategories.map(
+                              (diet) => DropdownMenuItem(
+                                value: diet,
+                                child: Text(diet),
+                              ),
                             ),
-                            ..._dietCategories.map((diet) => DropdownMenuItem(
-                                  value: diet,
-                                  child: Text(diet),
-                                )),
                           ],
                           onChanged: (value) {
                             setState(() {
@@ -337,43 +337,39 @@ StreamBuilder<int>(
                       scrollDirection: Axis.horizontal,
                       children: [
                         _buildFeatureCard(
+                          'Gợi ý Thực đơn', // Tiêu đề
+                          Icons.auto_awesome, // Icon
+                          Colors.teal, // Màu
+                          () {
+                            // Hành động
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const DailyMenuScreen(),
+                              ),
+                            );
+                          },
+                        ),
+                        _buildFeatureCard(
                           'Đã lưu',
                           Icons.bookmark,
                           Colors.blueGrey,
                           () => Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (_) => const SavedFoodsPage()),
+                            MaterialPageRoute(
+                              builder: (_) => const SavedFoodsPage(),
+                            ),
                           ),
                         ),
-                        _buildFeatureCard(
-                          'Nguyên liệu',
-                          Icons.shopping_basket,
-                          Colors.green,
-                          () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Chức năng đang cập nhật...')),
-                            );
-                          },
-                        ),
-                              _buildFeatureCard(
-                              'Chat AI',
-                              Icons.chat,
-                              Colors.deepPurple,
-                              () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(builder: (_) => const AIChatScreen()),
-                                );
-                              },
-                            ),
-
                         _buildFeatureCard(
                           'Thêm món',
                           Icons.add,
                           Colors.orange,
                           () => Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (_) => const AddFoodPage()),
+                            MaterialPageRoute(
+                              builder: (_) => const AddFoodPage(),
+                            ),
                           ),
                         ),
                       ],
@@ -411,7 +407,9 @@ StreamBuilder<int>(
         children: [
           IconButton(
             icon: const Icon(Icons.chevron_left),
-            onPressed: _currentPage > 1 ? () => _changePage(_currentPage - 1) : null,
+            onPressed: _currentPage > 1
+                ? () => _changePage(_currentPage - 1)
+                : null,
           ),
           ...List.generate(_totalPages, (i) {
             final page = i + 1;
@@ -436,7 +434,9 @@ StreamBuilder<int>(
           }),
           IconButton(
             icon: const Icon(Icons.chevron_right),
-            onPressed: _currentPage < _totalPages ? () => _changePage(_currentPage + 1) : null,
+            onPressed: _currentPage < _totalPages
+                ? () => _changePage(_currentPage + 1)
+                : null,
           ),
         ],
       ),
@@ -460,7 +460,9 @@ StreamBuilder<int>(
               )
             : const Icon(Icons.fastfood, size: 40),
         title: Text(data['name'] ?? ''),
-        subtitle: Text('Calo: ${data['calories'] ?? 0} kcal | Chế độ: ${data['diet'] ?? ''}'),
+        subtitle: Text(
+          'Calo: ${data['calories'] ?? 0} kcal | Chế độ: ${data['diet'] ?? ''}',
+        ),
         onTap: () => Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => FoodDetailScreen(foodId: food.id)),
@@ -475,7 +477,9 @@ StreamBuilder<int>(
                 final liked = s.data ?? false;
                 return IconButton(
                   tooltip: liked ? 'Bỏ thích' : 'Thích',
-                  onPressed: uid == null ? null : () => _likeSvc.toggleLike(food.id, liked),
+                  onPressed: uid == null
+                      ? null
+                      : () => _likeSvc.toggleLike(food.id, liked),
                   icon: Icon(
                     liked ? Icons.favorite : Icons.favorite_border,
                     color: liked ? Colors.pink : Colors.grey,
@@ -498,7 +502,9 @@ StreamBuilder<int>(
                 final saved = s.data ?? false;
                 return IconButton(
                   tooltip: saved ? 'Bỏ lưu' : 'Lưu',
-                  onPressed: uid == null ? null : () => _likeSvc.toggleSave(food.id, saved),
+                  onPressed: uid == null
+                      ? null
+                      : () => _likeSvc.toggleSave(food.id, saved),
                   icon: Icon(saved ? Icons.bookmark : Icons.bookmark_border),
                 );
               },
@@ -509,7 +515,12 @@ StreamBuilder<int>(
     );
   }
 
-  Widget _buildFeatureCard(String title, IconData icon, Color color, VoidCallback onTap) {
+  Widget _buildFeatureCard(
+    String title,
+    IconData icon,
+    Color color,
+    VoidCallback onTap,
+  ) {
     return GestureDetector(
       onTap: onTap,
       child: Card(
