@@ -4,10 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
-/// CommentSection widget
-/// - Shows paginated comments for a given foodId (initialLimit, load more)
-/// - Post new comment to collection 'comments'
-/// - Delete own comment
 class CommentSection extends StatefulWidget {
   final String foodId;
   final int pageSize;
@@ -23,21 +19,28 @@ class _CommentSectionState extends State<CommentSection> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _listController = ScrollController();
 
-  List<DocumentSnapshot<Map<String, dynamic>>> _docs = [];
-  bool _loading = false;
-  bool _loadingMore = false;
-  bool _hasMore = true;
-  DocumentSnapshot<Map<String, dynamic>>? _lastDoc;
-  String? _uid;
-  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _realtimeSub;
+  // Store comments as simple Maps to avoid snapshot type conflicts
+  List<Map<String, dynamic>> docs = [];
+  bool loading = false;
+  bool loadingMore = false;
+  bool hasMore = true;
+  // Keep lastDoc as DocumentSnapshot for pagination (startAfterDocument)
+  DocumentSnapshot<Map<String, dynamic>>? lastDoc;
+  String? uid;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? realtimeSub;
 
   @override
   void initState() {
     super.initState();
-    _uid = FirebaseAuth.instance.currentUser?.uid;
+    uid = FirebaseAuth.instance.currentUser?.uid;
     _loadInitial();
-    // Optional: listen for new comments (most recent ones) and insert if they arrive
-    _startRealtimeNewCommentsListener();
+    _startRealtimeListener();
+    _listController.addListener(_scrollListener);
+
+    // Set Vietnamese locale for timeago (optional)
+    try {
+      timeago.setLocaleMessages('vi', timeago.ViMessages());
+    } catch (_) {}
   }
 
   @override
@@ -51,82 +54,135 @@ class _CommentSectionState extends State<CommentSection> {
   @override
   void dispose() {
     _controller.dispose();
+    _listController.removeListener(_scrollListener);
     _listController.dispose();
-    _realtimeSub?.cancel();
+    realtimeSub?.cancel();
     super.dispose();
   }
 
+  void _scrollListener() {
+    if (!_listController.hasClients) return;
+    if (_listController.position.pixels >=
+            _listController.position.maxScrollExtent - 100 &&
+        !loadingMore &&
+        hasMore) {
+      _loadMore();
+    }
+  }
+
   Future<void> _resetAndLoad() async {
-    setState(() {
-      _docs = [];
-      _lastDoc = null;
-      _hasMore = true;
-    });
+    if (mounted) {
+      setState(() {
+        docs = [];
+        lastDoc = null;
+        hasMore = true;
+      });
+    }
     await _loadInitial();
   }
 
+  // Helper: convert QuerySnapshot -> List<Map> safely (handle possible null data)
+  List<Map<String, dynamic>> _docsFromQuerySnapshot(
+    QuerySnapshot<Map<String, dynamic>> snap,
+  ) {
+    return snap.docs.map((d) {
+      final data = d
+          .data(); // for QueryDocumentSnapshot this is non-nullable, but handle generically
+      final map = <String, dynamic>{'id': d.id};
+      map.addAll(data);
+      return map;
+    }).toList();
+  }
+
   Future<void> _loadInitial() async {
-    if (_loading) return;
-    setState(() => _loading = true);
+    if (loading) return;
+    if (mounted) setState(() => loading = true);
     try {
       final q = _db
           .collection('comments')
           .where('foodId', isEqualTo: widget.foodId)
           .orderBy('createdAt', descending: true)
           .limit(widget.pageSize);
+
       final snap = await q.get();
-      _docs = snap.docs.cast<DocumentSnapshot<Map<String, dynamic>>>();
-      _lastDoc = _docs.isNotEmpty ? _docs.last : null;
-      // If less than pageSize => no more
-      _hasMore = snap.docs.length == widget.pageSize;
-    } catch (e) {
-      debugPrint('loadInitial comments error: $e');
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Lỗi khi tải bình luận: $e')));
+      final loaded = _docsFromQuerySnapshot(snap);
+
+      if (mounted) {
+        setState(() {
+          docs = loaded;
+          lastDoc = snap.docs.isNotEmpty ? snap.docs.last : null;
+          hasMore = snap.docs.length == widget.pageSize;
+        });
+      } else {
+        docs = loaded;
+        lastDoc = snap.docs.isNotEmpty ? snap.docs.last : null;
+        hasMore = snap.docs.length == widget.pageSize;
+      }
+    } catch (e, st) {
+      debugPrint('loadInitial comments error: $e\n$st');
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi khi tải bình luận: $e')));
+      }
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) setState(() => loading = false);
     }
   }
 
   Future<void> _loadMore() async {
-    if (_loadingMore || !_hasMore || _lastDoc == null) return;
-    setState(() => _loadingMore = true);
+    if (loadingMore || !hasMore || lastDoc == null) return;
+    if (mounted) setState(() => loadingMore = true);
     try {
       final q = _db
           .collection('comments')
           .where('foodId', isEqualTo: widget.foodId)
           .orderBy('createdAt', descending: true)
-          .startAfterDocument(_lastDoc!)
+          .startAfterDocument(lastDoc!)
           .limit(widget.pageSize);
+
       final snap = await q.get();
-      final newDocs = snap.docs.cast<DocumentSnapshot<Map<String, dynamic>>>();
-      _docs.addAll(newDocs);
-      _lastDoc = newDocs.isNotEmpty ? newDocs.last : _lastDoc;
-      _hasMore = newDocs.length == widget.pageSize;
-    } catch (e) {
-      debugPrint('loadMore comments error: $e');
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Lỗi khi tải thêm bình luận: $e')));
+      final newMaps = _docsFromQuerySnapshot(snap);
+
+      if (mounted) {
+        setState(() {
+          docs.addAll(newMaps);
+          lastDoc = snap.docs.isNotEmpty ? snap.docs.last : lastDoc;
+          hasMore = newMaps.length == widget.pageSize;
+        });
+      } else {
+        docs.addAll(newMaps);
+        lastDoc = snap.docs.isNotEmpty ? snap.docs.last : lastDoc;
+        hasMore = newMaps.length == widget.pageSize;
+      }
+    } catch (e, st) {
+      debugPrint('loadMore comments error: $e\n$st');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Lỗi khi tải thêm bình luận: $e')),
+        );
+      }
     } finally {
-      if (mounted) setState(() => _loadingMore = false);
+      if (mounted) setState(() => loadingMore = false);
     }
   }
 
   Future<void> _postComment() async {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
+
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Vui lòng đăng nhập để bình luận')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Vui lòng đăng nhập để bình luận')),
+        );
+      }
       return;
     }
-    setState(() => _loading = true);
+
+    if (mounted) setState(() => loading = true);
+
     try {
       final authorName = user.displayName ?? user.email ?? 'Người dùng';
       final ref = await _db.collection('comments').add({
@@ -136,15 +192,24 @@ class _CommentSectionState extends State<CommentSection> {
         'authorName': authorName,
         'createdAt': FieldValue.serverTimestamp(),
       });
-      // Read created doc once to get timestamp resolved (best-effort)
-      final createdDoc = await ref.get();
-      // Insert on top of list
-      setState(() {
-        _docs.insert(0, createdDoc);
-        // if we exceed pageSize and we previously had exactly pageSize, we keep hasMore true
-      });
+
+      // Read the created doc; data() on DocumentSnapshot can be nullable before the serverTimestamp resolves,
+      // so check for null before adding.
+      final createdSnap = await ref.get();
+      final createdData = createdSnap.data();
+      final createdMap = <String, dynamic>{'id': ref.id};
+      if (createdData != null) createdMap.addAll(createdData);
+
+      if (mounted) {
+        setState(() {
+          docs.insert(0, createdMap);
+        });
+      } else {
+        docs.insert(0, createdMap);
+      }
+
       _controller.clear();
-      // Optionally scroll to top of comment list
+
       if (_listController.hasClients) {
         _listController.animateTo(
           0.0,
@@ -152,26 +217,29 @@ class _CommentSectionState extends State<CommentSection> {
           curve: Curves.easeOut,
         );
       }
-    } catch (e) {
-      debugPrint('postComment error: $e');
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Gửi bình luận thất bại: $e')));
+    } catch (e, st) {
+      debugPrint('postComment error: $e\n$st');
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Gửi bình luận thất bại: $e')));
+      }
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) setState(() => loading = false);
     }
   }
 
   Future<void> _deleteComment(String docId, String authorId) async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-    if (user.uid != authorId) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Bạn không có quyền xóa bình luận này')),
-      );
+    if (user == null || user.uid != authorId) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Bạn không có quyền xóa bình luận này')),
+        );
+      }
       return;
     }
+
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
@@ -189,69 +257,87 @@ class _CommentSectionState extends State<CommentSection> {
         ],
       ),
     );
+
     if (ok != true) return;
+
     try {
       await _db.collection('comments').doc(docId).delete();
-      setState(() {
-        _docs.removeWhere((d) => d.id == docId);
-      });
-    } catch (e) {
-      debugPrint('deleteComment error: $e');
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Xóa thất bại: $e')));
+      if (mounted) {
+        setState(() => docs.removeWhere((d) => d['id'] == docId));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Đã xóa bình luận')));
+      } else {
+        docs.removeWhere((d) => d['id'] == docId);
+      }
+    } catch (e, st) {
+      debugPrint('deleteComment error: $e\n$st');
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Xóa thất bại: $e')));
+      }
     }
   }
 
-  /// Optional: listen for new comments in realtime (only newest few)
-  void _startRealtimeNewCommentsListener() {
-    // Listen for very recent comments (e.g., created in last minute) and add them to top if not already present.
-    // This is optional and lightweight; adjust query as desired.
+  void _startRealtimeListener() {
     try {
-      _realtimeSub = _db
+      realtimeSub = _db
           .collection('comments')
           .where('foodId', isEqualTo: widget.foodId)
           .orderBy('createdAt', descending: true)
-          .limit(3)
           .snapshots()
           .listen((snap) {
-            if (snap.docs.isEmpty) return;
-            final newest = snap.docs.first;
-            if (_docs.isEmpty || _docs.first.id != newest.id) {
-              setState(() {
-                _docs.insert(
-                  0,
-                  newest as DocumentSnapshot<Map<String, dynamic>>,
-                );
-                // if duplicates occur later they will be filtered when building UI
-              });
+            for (var change in snap.docChanges) {
+              final doc = change.doc;
+              final data = doc.data();
+              final map = <String, dynamic>{'id': doc.id};
+              if (data != null) map.addAll(data);
+
+              switch (change.type) {
+                case DocumentChangeType.added:
+                  if (!docs.any((d) => d['id'] == map['id'])) {
+                    if (mounted) {
+                      setState(() => docs.insert(0, map));
+                    } else {
+                      docs.insert(0, map);
+                    }
+                  }
+                  break;
+                case DocumentChangeType.removed:
+                  if (mounted) {
+                    setState(() => docs.removeWhere((d) => d['id'] == doc.id));
+                  } else {
+                    docs.removeWhere((d) => d['id'] == doc.id);
+                  }
+                  break;
+                case DocumentChangeType.modified:
+                  final idx = docs.indexWhere((d) => d['id'] == map['id']);
+                  if (idx >= 0) {
+                    if (mounted) {
+                      setState(() => docs[idx] = map);
+                    } else {
+                      docs[idx] = map;
+                    }
+                  }
+                  break;
+              }
             }
           });
-    } catch (e) {
-      debugPrint('realtime comments listener error: $e');
+    } catch (e, st) {
+      debugPrint('Realtime listener error: $e\n$st');
     }
   }
 
-  Future<void> _refresh() async {
-    await _resetAndLoadForRefresh();
-  }
+  Future<void> _refresh() async => _resetAndLoad();
 
-  Future<void> _resetAndLoadForRefresh() async {
-    setState(() {
-      _docs = [];
-      _lastDoc = null;
-      _hasMore = true;
-    });
-    await _loadInitial();
-  }
+  Widget _buildCommentItemFromMap(Map<String, dynamic> doc) {
+    final text = doc['text'] ?? '';
+    final authorName = doc['authorName'] ?? 'Người dùng';
+    final authorId = doc['authorId'] ?? '';
+    final ts = doc['createdAt'];
+    final id = doc['id'] ?? '';
 
-  Widget _buildCommentItem(DocumentSnapshot<Map<String, dynamic>> doc) {
-    final data = doc.data() ?? {};
-    final text = data['text'] ?? '';
-    final authorName = data['authorName'] ?? 'Người dùng';
-    final authorId = data['authorId'] ?? '';
-    final ts = data['createdAt'];
     DateTime time;
     if (ts is Timestamp) {
       time = ts.toDate();
@@ -262,12 +348,9 @@ class _CommentSectionState extends State<CommentSection> {
     } else {
       time = DateTime.now();
     }
-    final timeStr = timeago.format(
-      time,
-      locale: 'vi',
-    ); // 'vi' if you added vi messages, otherwise default en
 
-    final isOwner = authorId == _uid;
+    final timeStr = timeago.format(time, locale: 'vi');
+    final isOwner = authorId == uid;
 
     return ListTile(
       title: Text(
@@ -289,7 +372,7 @@ class _CommentSectionState extends State<CommentSection> {
               const SizedBox(width: 12),
               if (isOwner)
                 GestureDetector(
-                  onTap: () => _deleteComment(doc.id, authorId),
+                  onTap: () => _deleteComment(id, authorId),
                   child: const Text(
                     'Xóa',
                     style: TextStyle(color: Colors.red, fontSize: 12),
@@ -307,28 +390,25 @@ class _CommentSectionState extends State<CommentSection> {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // Comments list area with pull-to-refresh
         Container(
           constraints: const BoxConstraints(minHeight: 80, maxHeight: 360),
-          child: _loading && _docs.isEmpty
+          child: loading && docs.isEmpty
               ? const Center(child: CircularProgressIndicator())
               : RefreshIndicator(
                   onRefresh: _refresh,
                   child: ListView.separated(
                     controller: _listController,
                     padding: const EdgeInsets.symmetric(vertical: 8),
-                    itemCount: _docs.length + (_hasMore ? 1 : 0),
-                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemCount: docs.length + (hasMore ? 1 : 0),
+                    separatorBuilder: (context, _) => const Divider(height: 1),
                     itemBuilder: (context, index) {
-                      if (index < _docs.length) {
-                        final doc = _docs[index];
-                        return _buildCommentItem(doc);
+                      if (index < docs.length) {
+                        return _buildCommentItemFromMap(docs[index]);
                       } else {
-                        // Load more button/footer
                         return Padding(
                           padding: const EdgeInsets.symmetric(vertical: 6.0),
                           child: Center(
-                            child: _loadingMore
+                            child: loadingMore
                                 ? const CircularProgressIndicator()
                                 : TextButton(
                                     onPressed: _loadMore,
@@ -341,10 +421,7 @@ class _CommentSectionState extends State<CommentSection> {
                   ),
                 ),
         ),
-
         const Divider(height: 1),
-
-        // Input area
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8),
           child: Row(
@@ -366,7 +443,7 @@ class _CommentSectionState extends State<CommentSection> {
                 ),
               ),
               const SizedBox(width: 8),
-              _loading
+              loading
                   ? const SizedBox(
                       width: 36,
                       height: 36,

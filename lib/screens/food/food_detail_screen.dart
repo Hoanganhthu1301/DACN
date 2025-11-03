@@ -23,6 +23,9 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
   late LikeService _likeSvc;
   final String? uid = FirebaseAuth.instance.currentUser?.uid;
 
+  // New fields for scrolling and comment input (if CommentSection needs scrolling focus)
+  final ScrollController _scrollController = ScrollController();
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -32,6 +35,7 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
   @override
   void dispose() {
     _videoController?.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -70,6 +74,18 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
     final curSpeed = _videoController!.value.playbackSpeed;
     _videoController!.setPlaybackSpeed((curSpeed + delta).clamp(0.25, 3.0));
     setState(() {});
+  }
+
+  void _scrollToComments() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeInOut,
+        );
+      }
+    });
   }
 
   @override
@@ -135,198 +151,251 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
             });
           }
 
-          return SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                CommentSection(foodId: widget.foodId),
-                // Ảnh món ăn
-                imageUrl.isNotEmpty
-                    ? Image.network(
-                        imageUrl,
-                        width: double.infinity,
-                        height: 240,
-                        fit: BoxFit.cover,
-                      )
-                    : Container(
-                        width: double.infinity,
-                        height: 200,
-                        color: Colors.grey.shade300,
-                        child: const Icon(Icons.fastfood, size: 80),
-                      ),
-                const SizedBox(height: 12),
-
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
+          // Build content and include CommentSection at the end
+          return Column(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  controller: _scrollController,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              name,
-                              style: const TextStyle(
-                                fontSize: 24,
+                      // Ảnh món ăn
+                      imageUrl.isNotEmpty
+                          ? Image.network(
+                              imageUrl,
+                              width: double.infinity,
+                              height: 240,
+                              fit: BoxFit.cover,
+                            )
+                          : Container(
+                              width: double.infinity,
+                              height: 200,
+                              color: Colors.grey.shade300,
+                              child: const Icon(Icons.fastfood, size: 80),
+                            ),
+                      const SizedBox(height: 12),
+
+                      Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    name,
+                                    style: const TextStyle(
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                                // ❤️ Yêu thích
+                                StreamBuilder<bool>(
+                                  stream: _likeSvc.isLikedStream(widget.foodId),
+                                  initialData: false,
+                                  builder: (context, s) {
+                                    final liked = s.data ?? false;
+                                    return IconButton(
+                                      tooltip: liked ? 'Bỏ thích' : 'Thích',
+                                      onPressed: uid == null
+                                          ? null
+                                          : () => _likeSvc.toggleLike(
+                                              widget.foodId,
+                                              liked,
+                                            ),
+                                      icon: Icon(
+                                        liked
+                                            ? Icons.favorite
+                                            : Icons.favorite_border,
+                                        color: liked
+                                            ? Colors.pink
+                                            : Colors.grey,
+                                      ),
+                                    );
+                                  },
+                                ),
+                                IconButton(
+                                  tooltip: 'Đi tới bình luận',
+                                  onPressed: _scrollToComments,
+                                  icon: const Icon(
+                                    Icons.comment,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                                // 🔖 Lưu món
+                                StreamBuilder<bool>(
+                                  stream: _likeSvc.isSavedStream(widget.foodId),
+                                  initialData: false,
+                                  builder: (context, s) {
+                                    final saved = s.data ?? false;
+                                    return IconButton(
+                                      tooltip: saved ? 'Bỏ lưu' : 'Lưu',
+                                      onPressed: uid == null
+                                          ? null
+                                          : () => _likeSvc.toggleSave(
+                                              widget.foodId,
+                                              saved,
+                                            ),
+                                      icon: Icon(
+                                        saved
+                                            ? Icons.bookmark
+                                            : Icons.bookmark_border,
+                                        color: saved
+                                            ? Colors.blue
+                                            : Colors.grey,
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text("Calo: $calories kcal"),
+                            if (diet.isNotEmpty) Text("Chế độ ăn: $diet"),
+                            if (categoryType.isNotEmpty)
+                              Text("Loại món ăn: $categoryType"),
+                            const SizedBox(height: 16),
+
+                            // Người đăng
+                            _AuthorSection(
+                              authorId: authorId,
+                              fallbackName: authorNameFb,
+                              fallbackPhotoURL: authorPhotoURLFb,
+                            ),
+
+                            const SizedBox(height: 12),
+                            const Divider(),
+                            const SizedBox(height: 12),
+
+                            // Nguyên liệu
+                            const Text(
+                              "Nguyên liệu:",
+                              style: TextStyle(
+                                fontSize: 18,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                          ),
-                          // ❤️ Yêu thích
-                          StreamBuilder<bool>(
-                            stream: _likeSvc.isLikedStream(widget.foodId),
-                            initialData: false,
-                            builder: (context, s) {
-                              final liked = s.data ?? false;
-                              return IconButton(
-                                tooltip: liked ? 'Bỏ thích' : 'Thích',
-                                onPressed: uid == null
-                                    ? null
-                                    : () => _likeSvc.toggleLike(
-                                        widget.foodId,
-                                        liked,
-                                      ),
-                                icon: Icon(
-                                  liked
-                                      ? Icons.favorite
-                                      : Icons.favorite_border,
-                                  color: liked ? Colors.pink : Colors.grey,
-                                ),
-                              );
-                            },
-                          ),
-                          // 🔖 Lưu món
-                          StreamBuilder<bool>(
-                            stream: _likeSvc.isSavedStream(widget.foodId),
-                            initialData: false,
-                            builder: (context, s) {
-                              final saved = s.data ?? false;
-                              return IconButton(
-                                tooltip: saved ? 'Bỏ lưu' : 'Lưu',
-                                onPressed: uid == null
-                                    ? null
-                                    : () => _likeSvc.toggleSave(
-                                        widget.foodId,
-                                        saved,
-                                      ),
-                                icon: Icon(
-                                  saved
-                                      ? Icons.bookmark
-                                      : Icons.bookmark_border,
-                                  color: saved ? Colors.blue : Colors.grey,
-                                ),
-                              );
-                            },
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text("Calo: $calories kcal"),
-                      if (diet.isNotEmpty) Text("Chế độ ăn: $diet"),
-                      if (categoryType.isNotEmpty)
-                        Text("Loại món ăn: $categoryType"),
-                      const SizedBox(height: 16),
-
-                      // Người đăng
-                      _AuthorSection(
-                        authorId: authorId,
-                        fallbackName: authorNameFb,
-                        fallbackPhotoURL: authorPhotoURLFb,
-                      ),
-
-                      const SizedBox(height: 12),
-                      const Divider(),
-                      const SizedBox(height: 12),
-
-                      // Nguyên liệu
-                      const Text(
-                        "Nguyên liệu:",
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Text(
-                        ingredients,
-                        style: const TextStyle(fontSize: 16, height: 1.5),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Hướng dẫn nấu
-                      const Text(
-                        "Hướng dẫn nấu:",
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Text(
-                        instructions.isNotEmpty
-                            ? instructions
-                            : "Chưa có hướng dẫn.",
-                        style: const TextStyle(fontSize: 16, height: 1.5),
-                      ),
-                      const SizedBox(height: 16),
-                    ],
-                  ),
-                ),
-
-                // Video
-                if (_videoController != null &&
-                    _videoController!.value.isInitialized)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                    child: Column(
-                      children: [
-                        AspectRatio(
-                          aspectRatio: _videoController!.value.aspectRatio,
-                          child: VideoPlayer(_videoController!),
-                        ),
-                        VideoProgressIndicator(
-                          _videoController!,
-                          allowScrubbing: true,
-                        ),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.replay_10),
-                              onPressed: () =>
-                                  _seekBy(const Duration(seconds: -10)),
+                            Text(
+                              ingredients,
+                              style: const TextStyle(fontSize: 16, height: 1.5),
                             ),
-                            IconButton(
-                              icon: Icon(
-                                _videoController!.value.isPlaying
-                                    ? Icons.pause
-                                    : Icons.play_arrow,
+                            const SizedBox(height: 16),
+
+                            // Hướng dẫn nấu
+                            const Text(
+                              "Hướng dẫn nấu:",
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
                               ),
-                              onPressed: _togglePlayPause,
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.forward_10),
-                              onPressed: () =>
-                                  _seekBy(const Duration(seconds: 10)),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.fast_forward),
-                              onPressed: () => _changeSpeed(0.25),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.fast_rewind),
-                              onPressed: () => _changeSpeed(-0.25),
                             ),
                             Text(
-                              '${_videoController!.value.playbackSpeed.toStringAsFixed(2)}x',
+                              instructions.isNotEmpty
+                                  ? instructions
+                                  : "Chưa có hướng dẫn.",
+                              style: const TextStyle(fontSize: 16, height: 1.5),
+                            ),
+                            const SizedBox(height: 16),
+                          ],
+                        ),
+                      ),
+
+                      // Video
+                      if (_videoController != null &&
+                          _videoController!.value.isInitialized)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                          child: Column(
+                            children: [
+                              AspectRatio(
+                                aspectRatio:
+                                    _videoController!.value.aspectRatio,
+                                child: VideoPlayer(_videoController!),
+                              ),
+                              VideoProgressIndicator(
+                                _videoController!,
+                                allowScrubbing: true,
+                              ),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.replay_10),
+                                    onPressed: () =>
+                                        _seekBy(const Duration(seconds: -10)),
+                                  ),
+                                  IconButton(
+                                    icon: Icon(
+                                      _videoController!.value.isPlaying
+                                          ? Icons.pause
+                                          : Icons.play_arrow,
+                                    ),
+                                    onPressed: _togglePlayPause,
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.forward_10),
+                                    onPressed: () =>
+                                        _seekBy(const Duration(seconds: 10)),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.fast_forward),
+                                    onPressed: () => _changeSpeed(0.25),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.fast_rewind),
+                                    onPressed: () => _changeSpeed(-0.25),
+                                  ),
+                                  Text(
+                                    '${_videoController!.value.playbackSpeed.toStringAsFixed(2)}x',
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+                            ],
+                          ),
+                        ),
+
+                      const SizedBox(height: 12),
+
+                      // Comments header with quick scroll button
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16.0,
+                          vertical: 8,
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'Bình luận',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 16),
-                      ],
-                    ),
+                      ),
+
+                      // Insert the CommentSection widget here
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                        child: CommentSection(foodId: widget.foodId),
+                      ),
+
+                      const SizedBox(height: 24),
+                    ],
                   ),
-              ],
-            ),
+                ),
+              ),
+
+              // If you want a persistent input at bottom separate from CommentSection,
+              // you can add it here. CommentSection is expected to include input by default.
+            ],
           );
         },
       ),
