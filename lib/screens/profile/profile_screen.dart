@@ -14,7 +14,7 @@ import '../../services/fcm_token_service.dart';
 
 // ✅ import thêm trang chỉnh sửa món ăn
 import '../food/edit_food_page.dart';
-
+import '../chat/chat_screen.dart';
 class ProfileScreen extends StatefulWidget {
   final String userId;
 
@@ -354,7 +354,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final email = (userData['email'] ?? '') as String;
     final bio = (userData['bio'] ?? '').toString().trim();
 
-    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
 
     return Container(
       padding: const EdgeInsets.all(16.0),
@@ -404,34 +404,60 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
           ),
           const SizedBox(height: 20),
-          if (!isCurrentUser)
-            ElevatedButton.icon(
-              icon: Icon(_isFollowing ? Icons.check : Icons.person_add),
-              label: Text(_isFollowing ? 'Đang theo dõi' : 'Theo dõi'),
-              onPressed: uid == null
-                  ? null
-                  : () async {
-                      try {
-                        if (_isFollowing) {
-                          await _followSvc.unfollow(widget.userId);
-                        } else {
-                          await _followSvc.follow(widget.userId);
-                        }
-                        await _loadStats();
-                      } catch (e) {
-                        if (!context.mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Lỗi: $e')));
-                      }
-                    },
-              style: ElevatedButton.styleFrom(
-                backgroundColor:
-                    _isFollowing ? Colors.grey.shade300 : Colors.orange,
-                foregroundColor:
-                    _isFollowing ? Colors.black87 : Colors.white,
+         if (!isCurrentUser)
+  Row(
+    mainAxisAlignment: MainAxisAlignment.center,
+    children: [
+      ElevatedButton.icon(
+        icon: Icon(_isFollowing ? Icons.check : Icons.person_add),
+        label: Text(_isFollowing ? 'Đang theo dõi' : 'Theo dõi'),
+        onPressed: currentUserId == null
+            ? null
+            : () async {
+                try {
+                  if (_isFollowing) {
+                    await _followSvc.unfollow(widget.userId);
+                  } else {
+                    await _followSvc.follow(widget.userId);
+                  }
+                  await _loadStats();
+                } catch (e) {
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Lỗi: $e')),
+                  );
+                }
+              },
+        style: ElevatedButton.styleFrom(
+          backgroundColor:
+              _isFollowing ? Colors.grey.shade300 : Colors.orange,
+          foregroundColor:
+              _isFollowing ? Colors.black87 : Colors.white,
+        ),
+      ),
+      const SizedBox(width: 10),
+      ElevatedButton.icon(
+        icon: const Icon(Icons.chat_bubble_outline),
+        label: const Text("Nhắn tin"),
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ChatScreen(
+                receiverId: widget.userId,
+                receiverName:
+                    userData['displayName'] ?? 'Người dùng',
               ),
             ),
-        ],
+          );
+        },
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.orange.shade600,
+          foregroundColor: Colors.white,
+        ),
+      ),
+    ],
+  ),        ],
       ),
     );
   }
