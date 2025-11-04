@@ -6,12 +6,11 @@ import '../../services/like_service.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/notifications_button.dart';
 import '../../core/push/push_service_min.dart';
-import '../food/add_food_page.dart';
 import '../food/food_detail_screen.dart';
-import '../food/saved_foods_page.dart';
 import '../chat/all_message.dart';
 import '../food/filtered_foods_screen.dart';
-import 'package:doan/screens/menu/daily_menu_screen.dart';
+import '../../services/message_service.dart';
+
 
 
 class HomeScreen extends StatefulWidget {
@@ -87,21 +86,8 @@ class _HomeScreenState extends State<HomeScreen> {
           });
         });
   }
-Stream<int> unreadMessagesCount() {
-  final currentUser = FirebaseAuth.instance.currentUser!;
-  return FirebaseFirestore.instance
-      .collection('messages')
-      .where('participants', arrayContains: currentUser.uid)
-      .snapshots()
-      .map((snapshot) {
-    int count = 0;
-    for (var doc in snapshot.docs) {
-      final readBy = List<String>.from(doc.data()['readBy'] ?? []);
-      if (!readBy.contains(currentUser.uid)) count++;
-    }
-    return count;
-  });
-}
+final _msgSvc = MessageService();
+
 
 
   Future<void> _fetchDietCategories() async {
@@ -196,7 +182,7 @@ Stream<int> unreadMessagesCount() {
         if (!_isAdmin)
             // Thêm StreamBuilder badge tin nhắn
         StreamBuilder<int>(
-          stream: unreadMessagesCount(),
+          stream: _msgSvc.unreadCountStream(),
           builder: (context, snapshot) {
             final unread = snapshot.data ?? 0;
             return Stack(
@@ -331,51 +317,7 @@ Stream<int> unreadMessagesCount() {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  SizedBox(
-                    height: 100,
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      children: [
-                        _buildFeatureCard(
-                          'Gợi ý Thực đơn', // Tiêu đề
-                          Icons.auto_awesome, // Icon
-                          Colors.teal, // Màu
-                          () {
-                            // Hành động
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const DailyMenuScreen(),
-                              ),
-                            );
-                          },
-                        ),
-                        _buildFeatureCard(
-                          'Đã lưu',
-                          Icons.bookmark,
-                          Colors.blueGrey,
-                          () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const SavedFoodsPage(),
-                            ),
-                          ),
-                        ),
-                        _buildFeatureCard(
-                          'Thêm món',
-                          Icons.add,
-                          Colors.orange,
-                          () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const AddFoodPage(),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 10),
+                  
                   Expanded(
                     child: RefreshIndicator(
                       onRefresh: () async {
@@ -495,6 +437,7 @@ Stream<int> unreadMessagesCount() {
               },
             ),
             const SizedBox(width: 8),
+              
             StreamBuilder<bool>(
               stream: _likeSvc.isSavedStream(food.id),
               initialData: false,
@@ -510,34 +453,6 @@ Stream<int> unreadMessagesCount() {
               },
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFeatureCard(
-    String title,
-    IconData icon,
-    Color color,
-    VoidCallback onTap,
-  ) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Card(
-        color: color.withAlpha(25),
-        margin: const EdgeInsets.only(right: 10),
-        elevation: 2,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: SizedBox(
-          width: 120,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, color: color, size: 36),
-              const SizedBox(height: 8),
-              Text(title, textAlign: TextAlign.center),
-            ],
-          ),
         ),
       ),
     );

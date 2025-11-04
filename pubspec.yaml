@@ -35,6 +35,7 @@ dependencies:
   flutter_colorpicker: ^1.1.0
   shared_preferences: ^2.2.15
   timeago: ^3.7.1
+  share_plus: ^12.0.1
   
 dev_dependencies:
   flutter_test:
